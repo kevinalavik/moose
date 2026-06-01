@@ -96,9 +96,9 @@ void kmain(void)
     kprintf("Hello from %s kernel\n", "moose");
     kprintf("%s %c %d %u 0x%x %p\n", "test", 'A', -123, 456, 0xdeadbeef, &moose_font);
     kprintf("Loaded font:\n");
-    kprintf(" Family: %s\n", moose_font.props.family_name);
-    kprintf(" Copyright: %s\n", moose_font.props.copyright);
-    kprintf(" Notice: %s\n", moose_font.props.notice);
+    kprintf("  Family: %s\n", moose_font.props.family_name);
+    kprintf("  Copyright: %s\n", moose_font.props.copyright);
+    kprintf("  Notice: %s\n", moose_font.props.notice);
 
     hcf();
 }
