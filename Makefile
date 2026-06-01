@@ -87,7 +87,7 @@ kernel/.deps-obtained:
 kernel: kernel/.deps-obtained
 	$(Q)$(MAKE) -C kernel
 
-$(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel
+$(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel rootfs
 	@printf "  %-7s %s\n" GEN "iso_root"
 	$(Q)rm -rf iso_root
 	$(Q)mkdir -p iso_root/boot
@@ -97,6 +97,9 @@ $(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel
 	@printf "  %-7s %s\n" CP "kernel/bin/$(KERNEL_NAME)"
 	$(Q)cp kernel/bin/$(KERNEL_NAME) iso_root/boot/
 
+	@printf "  %-7s %s\n" CP "rootfs/"
+	$(Q)cp -r rootfs/* iso_root/
+	
 	@printf "  %-7s %s\n" CP "limine files"
 	$(Q)cp limine.conf \
 		limine-binary/limine-bios.sys \
@@ -123,7 +126,8 @@ $(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel
 	@printf "  %-7s %s\n" CLEAN "iso_root"
 	$(Q)rm -rf iso_root
 
-$(IMAGE_NAME).hdd: limine-binary/limine limine.conf kernel
+# todo: make hdd copy over rootfs (idk mtools that good)
+$(IMAGE_NAME).hdd: limine-binary/limine limine.conf kernel 
 	@printf "  %-7s %s\n" HDD "$(IMAGE_NAME).hdd"
 	$(Q)rm -f $(IMAGE_NAME).hdd
 	$(Q)dd if=/dev/zero bs=1M count=0 seek=64 of=$(IMAGE_NAME).hdd status=none

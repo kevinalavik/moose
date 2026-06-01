@@ -76,7 +76,7 @@ override CFLAGS += \
 	-mcmodel=kernel
 
 override CPPFLAGS := \
-	-I src \
+	-I include \
 	-I limine-protocol/include \
 	-isystem freestnd-c-hdrs/include \
 	$(CPPFLAGS) \

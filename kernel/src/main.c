@@ -1,100 +1,104 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
 #include <limine.h>
+#define BDF_IMPLEMENTATION
+#include <util/bdf.h>
+#include <lib/string.h>
+#include <lib/term.h>
+#include <sys/moose.h>
+#include <util/printf.h>
 
-__attribute__((used, section(".limine_requests")))
-static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(6);
+#define FONT_PATH "/etc/fonts/tty.bdf"
+#define FONT_MAX_GPLHYS 2048
 
-__attribute__((used, section(".limine_requests")))
-static volatile struct limine_framebuffer_request framebuffer_request = {
+__attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
+    LIMINE_REQUESTS_START_MARKER;
+
+__attribute__((used, section(".limine_requests"))) static volatile uint64_t limine_base_revision[] =
+    LIMINE_BASE_REVISION(6);
+
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0
-};
+    .revision = 0};
 
-__attribute__((used, section(".limine_requests_start")))
-static volatile uint64_t limine_requests_start_marker[] = LIMINE_REQUESTS_START_MARKER;
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_module_request module_request = {
+    .id = LIMINE_MODULE_REQUEST_ID,
+    .revision = 0};
 
-__attribute__((used, section(".limine_requests_end")))
-static volatile uint64_t limine_requests_end_marker[] = LIMINE_REQUESTS_END_MARKER;
+__attribute__((used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =
+    LIMINE_REQUESTS_END_MARKER;
 
-void *memcpy(void *restrict dest, const void *restrict src, size_t n) {
-    uint8_t *restrict pdest = dest;
-    const uint8_t *restrict psrc = src;
+struct limine_framebuffer *moose_fb;
+BDF_Font moose_font;
 
-    for (size_t i = 0; i < n; i++) {
-        pdest[i] = psrc[i];
-    }
+static BDF_Glyph glyphs[FONT_MAX_GPLHYS];
 
-    return dest;
+static void hcf(void)
+{
+    for (;;)
+        asm volatile("hlt");
 }
 
-void *memset(void *s, int c, size_t n) {
-    uint8_t *p = s;
+static struct limine_file *find_module(const char *path)
+{
+    struct limine_module_response *response = module_request.response;
 
-    for (size_t i = 0; i < n; i++) {
-        p[i] = (uint8_t)c;
+    if (!response)
+        return NULL;
+
+    for (uint64_t i = 0; i < response->module_count; i++)
+    {
+        struct limine_file *module = response->modules[i];
+
+        if (!module || !module->path)
+            continue;
+
+        if (strcmp(module->path, path) == 0)
+            return module;
     }
 
-    return s;
+    return NULL;
 }
 
-void *memmove(void *dest, const void *src, size_t n) {
-    uint8_t *pdest = dest;
-    const uint8_t *psrc = src;
-
-    if ((uintptr_t)src > (uintptr_t)dest) {
-        for (size_t i = 0; i < n; i++) {
-            pdest[i] = psrc[i];
-        }
-    } else if ((uintptr_t)src < (uintptr_t)dest) {
-        for (size_t i = n; i > 0; i--) {
-            pdest[i-1] = psrc[i-1];
-        }
-    }
-
-    return dest;
-}
-
-int memcmp(const void *s1, const void *s2, size_t n) {
-    const uint8_t *p1 = s1;
-    const uint8_t *p2 = s2;
-
-    for (size_t i = 0; i < n; i++) {
-        if (p1[i] != p2[i]) {
-            return p1[i] < p2[i] ? -1 : 1;
-        }
-    }
-
-    return 0;
-}
-
-static void hcf(void) {
-    for (;;) {
-        asm ("hlt");
-    }
-}
-
-void kmain(void) {
-    if (LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision) == false) {
+void kmain(void)
+{
+    if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
         hcf();
-    }
 
-    if (framebuffer_request.response == NULL
-     || framebuffer_request.response->framebuffer_count < 1) {
+    if (!framebuffer_request.response ||
+        framebuffer_request.response->framebuffer_count < 1)
         hcf();
-    }
 
-    struct limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
+    if (!module_request.response)
+        hcf();
 
-    volatile uint32_t *fb_ptr = framebuffer->address;
-    for (size_t y = 0; y < framebuffer->height; y++) {
-        for (size_t x = 0; x < framebuffer->width; x++) {
-            uint32_t nX = x * 255 / framebuffer->width;
-            uint32_t nY = y * 255 / framebuffer->height;
-            fb_ptr[y * (framebuffer->pitch / 4) + x] = (nY << 8) | nX;
-        }
-    }
+    moose_fb = framebuffer_request.response->framebuffers[0];
+
+    if (!moose_fb || !moose_fb->address)
+        hcf();
+
+    if (moose_fb->bpp != 32)
+        hcf();
+
+    struct limine_file *font_file = find_module(FONT_PATH);
+
+    if (!font_file)
+        hcf();
+
+    moose_font.glyphs = glyphs;
+    moose_font.glyphs_capacity = FONT_MAX_GPLHYS;
+
+    if (bdf_parse(
+            (const char *)font_file->address,
+            (size_t)font_file->size,
+            &moose_font) != BDF_OK)
+        hcf();
+
+    term_init(moose_fb, &moose_font);
+    kprintf("Hello from %s kernel\n", "moose");
+    kprintf("%s %c %d %u 0x%x %p\n", "test", 'A', -123, 456, 0xdeadbeef, &moose_font);
+    kprintf("Loaded font:\n");
+    kprintf(" Family: %s\n", moose_font.props.family_name);
+    kprintf(" Copyright: %s\n", moose_font.props.copyright);
+    kprintf(" Notice: %s\n", moose_font.props.notice);
 
     hcf();
 }
