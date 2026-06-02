@@ -13,7 +13,7 @@
 #include <mm/pmm.h>
 #include <lib/math.h>
 
-#define FONT_PATH "/etc/fonts/tty-big.bdf"
+#define FONT_PATH "/etc/fonts/tty/early.bdf"
 #define FONT_MAX_GPLHYS 2048
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
