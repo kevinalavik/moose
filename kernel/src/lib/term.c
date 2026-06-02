@@ -31,6 +31,10 @@ struct terminal
 
     uint16_t fg;
     uint16_t bg;
+    uint32_t fg_rgb;
+    uint32_t bg_rgb;
+    bool fg_is_rgb;
+    bool bg_is_rgb;
 
     bool bold;
     bool reverse;
@@ -74,7 +78,7 @@ static const uint32_t ansi16[16] = {
 
 static uint32_t rgb(uint32_t r, uint32_t g, uint32_t b)
 {
-    return (r << 16) | (g << 8) | b;
+    return ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 }
 
 static uint32_t cube_value(uint32_t n)
@@ -158,38 +162,92 @@ static uint16_t term_effective_fg(void)
     return term.fg;
 }
 
+static uint32_t term_indexed_fg_color(void)
+{
+    return ansi_color(term_effective_fg());
+}
+
+static uint32_t term_indexed_bg_color(void)
+{
+    return ansi_color(term.bg);
+}
+
+static uint32_t term_real_fg_color(void)
+{
+    if (term.fg_is_rgb)
+        return term.fg_rgb;
+
+    return term_indexed_fg_color();
+}
+
+static uint32_t term_real_bg_color(void)
+{
+    if (term.bg_is_rgb)
+        return term.bg_rgb;
+
+    return term_indexed_bg_color();
+}
+
 static uint32_t term_fg_color(void)
 {
     if (term.reverse)
-        return ansi_color(term.bg);
+        return term_real_bg_color();
 
-    return ansi_color(term_effective_fg());
+    return term_real_fg_color();
 }
 
 static uint32_t term_bg_color(void)
 {
     if (term.reverse)
-        return ansi_color(term_effective_fg());
+        return term_real_fg_color();
 
-    return ansi_color(term.bg);
+    return term_real_bg_color();
 }
 
 static void term_set_fg(uint16_t n)
 {
     if (n < 256)
+    {
         term.fg = n;
+        term.fg_is_rgb = false;
+    }
 }
 
 static void term_set_bg(uint16_t n)
 {
     if (n < 256)
+    {
         term.bg = n;
+        term.bg_is_rgb = false;
+    }
+}
+
+static void term_set_fg_rgb(uint32_t r, uint32_t g, uint32_t b)
+{
+    if (r <= 255 && g <= 255 && b <= 255)
+    {
+        term.fg_rgb = rgb(r, g, b);
+        term.fg_is_rgb = true;
+    }
+}
+
+static void term_set_bg_rgb(uint32_t r, uint32_t g, uint32_t b)
+{
+    if (r <= 255 && g <= 255 && b <= 255)
+    {
+        term.bg_rgb = rgb(r, g, b);
+        term.bg_is_rgb = true;
+    }
 }
 
 static void term_reset_attrs(void)
 {
     term.fg = TERM_DEFAULT_FG;
     term.bg = TERM_DEFAULT_BG;
+    term.fg_rgb = 0;
+    term.bg_rgb = 0;
+    term.fg_is_rgb = false;
+    term.bg_is_rgb = false;
     term.bold = false;
     term.reverse = false;
 }
@@ -725,8 +783,20 @@ static void ansi_apply_sgr(void)
                 continue;
             }
 
-            if (mode == 2)
+            if (mode == 2 && i + 4 < term.ansi_param_count)
             {
+                int r = ansi_param(i + 2, -1);
+                int g = ansi_param(i + 3, -1);
+                int b = ansi_param(i + 4, -1);
+
+                if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+                {
+                    if (p == 38)
+                        term_set_fg_rgb((uint32_t)r, (uint32_t)g, (uint32_t)b);
+                    else
+                        term_set_bg_rgb((uint32_t)r, (uint32_t)g, (uint32_t)b);
+                }
+
                 i += 4;
                 continue;
             }

@@ -14,7 +14,7 @@ extern void *isr_stub_table[];
 
 __attribute__((noreturn)) void exception_handler(int_frame_t *frame)
 {
-    klog("arch/idt",
+    klog("panic",
          ANSI_BOLD_RED
          "exception vector=%lu error=%#lx rip=%#lx" ANSI_RESET,
          frame->vector,
@@ -33,7 +33,7 @@ void interrupt_handler(int_frame_t *frame)
     if (!warned[frame->vector])
     {
         warned[frame->vector] = true;
-        klog("arch/idt",
+        klog("idt",
              ANSI_BOLD_YELLOW
              "unhandled interrupt vector=%lu rip=%#lx" ANSI_RESET,
              frame->vector,
@@ -68,5 +68,5 @@ void idt_init()
     __asm__ volatile("lidt %0" : : "m"(idtr));
     __asm__ volatile("sti");
 
-    klog("arch/idt", ANSI_YELLOW "loaded idt @ %p" ANSI_RESET, &idtr);
+    klog("idt", ANSI_YELLOW "loaded idt @ %p" ANSI_RESET, &idtr);
 }

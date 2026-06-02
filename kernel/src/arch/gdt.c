@@ -55,5 +55,5 @@ void gdt_init()
         : [gdtr] "m"(kernel_gdtr), [csel] "i"(GDT_KCODE_SEL),
           [dsel] "i"(GDT_KDATA_SEL)
         : "rax", "memory");
-    klog("arch/gdt", ANSI_YELLOW "loaded kernel gdt @ %p" ANSI_RESET, &kernel_gdtr);
+    klog("gdt", ANSI_YELLOW "loaded kernel gdt @ %p" ANSI_RESET, &kernel_gdtr);
 }

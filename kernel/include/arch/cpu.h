@@ -3,6 +3,13 @@
 
 __attribute__((noreturn)) static inline void hcf(void)
 {
+    asm volatile("cli");
+    for (;;)
+        asm volatile("hlt");
+}
+
+__attribute__((noreturn)) static inline void hlt(void)
+{
     for (;;)
         asm volatile("hlt");
 }
