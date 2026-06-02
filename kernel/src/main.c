@@ -10,6 +10,8 @@
 #include <arch/cpu.h>
 #include <arch/idt.h>
 #include <dev/uart.h>
+#include <mm/pmm.h>
+#include <lib/math.h>
 
 #define FONT_PATH "/etc/fonts/tty-big.bdf"
 #define FONT_MAX_GPLHYS 2048
@@ -28,15 +30,26 @@ __attribute__((used, section(".limine_requests"))) static volatile struct limine
     .id = LIMINE_MODULE_REQUEST_ID,
     .revision = 0};
 
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_memmap_request memmap_request = {
+    .id = LIMINE_MEMMAP_REQUEST_ID,
+    .revision = 0};
+
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0};
+
 __attribute__((used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =
     LIMINE_REQUESTS_END_MARKER;
 
-struct limine_framebuffer *moose_fb;
+struct limine_framebuffer *moose_fb = NULL;
+struct limine_memmap_response *moose_memmap = NULL;
+
+uintptr_t moose_hhdm_off = 0;
+
 BDF_Font moose_font;
-
 static BDF_Glyph glyphs[FONT_MAX_GPLHYS];
-handle_t com1;
 
+handle_t com1;
 int putc(char ch)
 {
     term_putc(ch);
@@ -129,17 +142,39 @@ void kmain(void)
         klog("early", "using font: %s (%dx%d)", moose_font.props.family_name, moose_font.bbox.w, moose_font.bbox.h);
 
     gdt_init();
-    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x" ANSI_RESET, GDT_KCODE_SEL, GDT_KDATA_SEL);
+    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);
 
     idt_init();
     klog("early", "init IDT");
 
-    kprintf(
-        "\033[38;2;241;73;190m  _ _\033[38;2;214;78;210m_ ___\033[38;2;187;84;231m   __\033[38;2;160;89;251m_   _\033[38;2;136;112;255m__   \033[38;2;111;139;255m___  \033[38;2;87;166;255m ___ \033[38;2;66;192;253m  ___\033[38;2;72;209;230m   __\033[38;2;79;227;207m_   _\033[38;2;86;244;184m__   \033[38;2;108;251;159m___  \033[38;2;152;242;132m ___ \033[38;2;197;232;105m ___ \033[38;2;242;223;78m ___\033[0m\n"
-        "\033[38;2;241;73;190m | '_\033[38;2;214;78;210m ` _ \033[38;2;187;84;231m\\ / _\033[38;2;160;89;251m \\ / \033[38;2;136;112;255m_ \\ /\033[38;2;111;139;255m _ \\ \033[38;2;87;166;255m/ _ \\\033[38;2;66;192;253m / _ \033[38;2;72;209;230m\\ / _\033[38;2;79;227;207m \\ / \033[38;2;86;244;184m_ \\ /\033[38;2;108;251;159m _ \\ \033[38;2;152;242;132m/ _ \\\033[38;2;197;232;105m/ __|\033[38;2;242;223;78m/ _ \\\033[0m\n"
-        "\033[38;2;241;73;190m | | \033[38;2;214;78;210m| | |\033[38;2;187;84;231m | (_\033[38;2;160;89;251m) | (\033[38;2;136;112;255m_) | \033[38;2;111;139;255m(_) |\033[38;2;87;166;255m (_) \033[38;2;66;192;253m| (_)\033[38;2;72;209;230m | (_\033[38;2;79;227;207m) | (\033[38;2;86;244;184m_) | \033[38;2;108;251;159m(_) |\033[38;2;152;242;132m (_) \033[38;2;197;232;105m\\__ \\\033[38;2;242;223;78m  __/\033[0m\n"
-        "\033[38;2;241;73;190m |_| \033[38;2;214;78;210m|_| |\033[38;2;187;84;231m_|\\__\033[38;2;160;89;251m_/ \\_\033[38;2;136;112;255m__/ \\\033[38;2;111;139;255m___/ \033[38;2;87;166;255m\\___/\033[38;2;66;192;253m \\___\033[38;2;72;209;230m/ \\__\033[38;2;79;227;207m_/ \\_\033[38;2;86;244;184m__/ \\\033[38;2;108;251;159m___/ \033[38;2;152;242;132m\\___/\033[38;2;197;232;105m|___/\033[38;2;242;223;78m\\___|\033[0m\n");
-    kprintf("howdy!\n");
+    if (!memmap_request.response)
+    {
+        klog("early", ANSI_BOLD_RED "failed to get memory map" ANSI_RESET);
+        hcf();
+    }
+    moose_memmap = memmap_request.response;
 
+    if (!hhdm_request.response)
+    {
+        klog("early", ANSI_BOLD_RED "failed to get hhdm offset" ANSI_RESET);
+        hcf();
+    }
+    moose_hhdm_off = hhdm_request.response->offset;
+    pmm_init();
+    klog("early", "init PMM");
+
+    /* test pmm*/ {
+        uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
+        klog("early", "Allocate single page @ %p", a);
+        pmm_ref(a); /* we now manage it */
+        *a = 42;
+        klog("early", "Wrote \"%d\" to %p", *a, a);
+        pmm_unref(a); /* not managed by us when we are done */
+        pmm_free(a);
+
+        /*
+            NOTE: the ref/unref calls are not nesecary, i just do it to test :^)
+        */
+    }
     hlt();
 }
