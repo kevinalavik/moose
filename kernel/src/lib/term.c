@@ -57,23 +57,22 @@ struct terminal
 static struct terminal term;
 
 static const uint32_t ansi16[16] = {
-    /* 16 color pallet for CSI, we also support rgb colors */
-    0x00000000,
-    0x007f0000,
-    0x00007f00,
-    0x00c4a100,
-    0x003366a3,
-    0x007f007f,
-    0x00007f7f,
-    0x00bfbfbf,
-    0x0073828a,
-    0x00ff0000,
-    0x0000ff00,
-    0x00ffff00,
-    0x00739ecf,
-    0x00ff00ff,
-    0x0000ffff,
-    0x00ffffff,
+    0x001e1e2e,
+    0x00f38ba8,
+    0x00a6e3a1,
+    0x00f9e2af,
+    0x0089b4fa,
+    0x00cba6f7,
+    0x0094e2d5,
+    0x00cdd6f4,
+    0x00585b70,
+    0x00eba0ac,
+    0x00b4f9c0,
+    0x00fce8b2,
+    0x00a6c8ff,
+    0x00d8b4fe,
+    0x00aef3e7,
+    0x00f5f7ff,
 };
 
 static uint32_t rgb(uint32_t r, uint32_t g, uint32_t b)
@@ -1163,7 +1162,7 @@ static void term_tab(void)
         term_put_glyph(' ');
 }
 
-void putc(char c)
+void term_putc(char c)
 {
     if (!term.fb || !term.fb->address || !term.font)
         return;
@@ -1214,11 +1213,11 @@ void putc(char c)
     term_cursor_show();
 }
 
-void puts(const char *s)
+void term_puts(const char *s)
 {
     if (!s)
         return;
 
     while (*s)
-        putc(*s++);
+        term_putc(*s++);
 }

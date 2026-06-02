@@ -14,13 +14,7 @@ extern void *isr_stub_table[];
 
 __attribute__((noreturn)) void exception_handler(int_frame_t *frame)
 {
-    klog("panic",
-         ANSI_BOLD_RED
-         "exception vector=%lu error=%#lx rip=%#lx" ANSI_RESET,
-         frame->vector,
-         frame->error_code,
-         frame->rip);
-
+    klog("panic", ANSI_BOLD_RED "exception vector=%lu error=%#lx rip=%#lx" ANSI_RESET, frame->vector, frame->error_code, frame->rip);
     hcf();
 }
 
@@ -33,11 +27,7 @@ void interrupt_handler(int_frame_t *frame)
     if (!warned[frame->vector])
     {
         warned[frame->vector] = true;
-        klog("idt",
-             ANSI_BOLD_YELLOW
-             "unhandled interrupt vector=%lu rip=%#lx" ANSI_RESET,
-             frame->vector,
-             frame->rip);
+        klog("idt", ANSI_BOLD_YELLOW "unhandled interrupt vector=%lu rip=%#lx" ANSI_RESET, frame->vector, frame->rip);
     }
 }
 

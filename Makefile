@@ -12,7 +12,7 @@ ifeq ($(V),1)
 Q :=
 endif
 
-QEMUFLAGS := -m 2G
+QEMUFLAGS := -m 2G -serial stdio
 
 HOST_CC := cc
 HOST_CFLAGS := -g -O2 -pipe

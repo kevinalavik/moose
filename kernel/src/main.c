@@ -9,6 +9,7 @@
 #include <arch/gdt.h>
 #include <arch/cpu.h>
 #include <arch/idt.h>
+#include <dev/uart.h>
 
 #define FONT_PATH "/etc/fonts/tty-big.bdf"
 #define FONT_MAX_GPLHYS 2048
@@ -34,6 +35,14 @@ struct limine_framebuffer *moose_fb;
 BDF_Font moose_font;
 
 static BDF_Glyph glyphs[FONT_MAX_GPLHYS];
+handle_t com1;
+
+int putc(char ch)
+{
+    term_putc(ch);
+    device_write(&com1, &ch, 1);
+    return 1;
+}
 
 static struct limine_file *find_module(const char *path)
 {
@@ -61,40 +70,62 @@ void kmain(void)
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
         hcf();
 
+    com1 = uart_init(COM1);
+    if (com1.dev == NULL)
+    {
+        /* this is sort-of pointless rn since there will be no output if uart fails  since it inits before fb*/
+        klog("early", ANSI_YELLOW "failed to open COM1 device handle" ANSI_RESET);
+    }
+
     if (!framebuffer_request.response ||
         framebuffer_request.response->framebuffer_count < 1)
-        hcf();
+    {
+        klog("early", ANSI_BOLD_RED "failed to get framebuffer" ANSI_RESET);
+        hcf(); /* this is a graphical OS so if no framebuffer available then fuck off*/
+    }
 
     if (!module_request.response)
+    {
+        klog("early", ANSI_BOLD_RED "failed to get kernel modules" ANSI_RESET);
         hcf();
+    }
 
     moose_fb = framebuffer_request.response->framebuffers[0];
-
     if (!moose_fb || !moose_fb->address)
+    {
+        klog("early", ANSI_BOLD_RED "invalid framebuffer" ANSI_RESET);
         hcf();
+    }
 
+    /* todo: make term support any bpp aswell as color shift */
     if (moose_fb->bpp != 32)
+    {
+        klog("early", ANSI_BOLD_RED "not a 32bpp framebuffer" ANSI_RESET);
         hcf();
+    }
 
     struct limine_file *font_file = find_module(FONT_PATH);
-
     if (!font_file)
-        hcf();
+    {
+        klog("early", ANSI_YELLOW "failed to get font: \"%s\". Is it in your limine.conf?" ANSI_RESET, FONT_PATH);
+    }
+    else
+    {
+        moose_font.glyphs = glyphs;
+        moose_font.glyphs_capacity = FONT_MAX_GPLHYS;
 
-    moose_font.glyphs = glyphs;
-    moose_font.glyphs_capacity = FONT_MAX_GPLHYS;
+        if (bdf_parse((const char *)font_file->address, (size_t)font_file->size, &moose_font) != BDF_OK)
+        {
+            klog("early", ANSI_YELLOW "failed to parse font: \"%s\"" ANSI_RESET, FONT_PATH);
+        }
+        else
+            term_init(moose_fb, &moose_font);
+    }
 
-    if (bdf_parse(
-            (const char *)font_file->address,
-            (size_t)font_file->size,
-            &moose_font) != BDF_OK)
-        hcf();
-
-    term_init(moose_fb, &moose_font);
     klog("early", "moose kernel v0.1.0");
 
     gdt_init();
-    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);
+    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x" ANSI_RESET, GDT_KCODE_SEL, GDT_KDATA_SEL);
 
     idt_init();
     klog("early", "init IDT");
