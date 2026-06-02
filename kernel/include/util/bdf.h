@@ -181,6 +181,13 @@ static void bdf__rest(const char *p, char *dst, size_t cap)
     for (size_t i = 0; i < len; i++)
         dst[i] = p[i];
     dst[len] = '\0';
+    size_t dlen = bdf__strlen(dst);
+    if (dlen >= 2 && dst[0] == '"' && dst[dlen - 1] == '"')
+    {
+        for (size_t i = 0; i < dlen - 2; i++)
+            dst[i] = dst[i + 1];
+        dst[dlen - 2] = '\0';
+    }
 }
 
 static void bdf__token(const char *p, char *dst, size_t cap)

@@ -119,10 +119,14 @@ void kmain(void)
             klog("early", ANSI_YELLOW "failed to parse font: \"%s\"" ANSI_RESET, FONT_PATH);
         }
         else
+        {
             term_init(moose_fb, &moose_font);
+        }
     }
 
     klog("early", "moose kernel v0.1.0");
+    if (moose_font.glyphs != NULL)
+        klog("early", "using font: %s (%dx%d)", moose_font.props.family_name, moose_font.bbox.w, moose_font.bbox.h);
 
     gdt_init();
     klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x" ANSI_RESET, GDT_KCODE_SEL, GDT_KDATA_SEL);
