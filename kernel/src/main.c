@@ -7,6 +7,8 @@
 #include <util/printf.h>
 #include <sys/klog.h>
 #include <arch/gdt.h>
+#include <arch/cpu.h>
+#include <arch/idt.h>
 
 #define FONT_PATH "/etc/fonts/tty.bdf"
 #define FONT_MAX_GPLHYS 2048
@@ -32,12 +34,6 @@ struct limine_framebuffer *moose_fb;
 BDF_Font moose_font;
 
 static BDF_Glyph glyphs[FONT_MAX_GPLHYS];
-
-static void hcf(void)
-{
-    for (;;)
-        asm volatile("hlt");
-}
 
 static struct limine_file *find_module(const char *path)
 {
@@ -99,6 +95,11 @@ void kmain(void)
 
     gdt_init();
     klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);
+
+    idt_init();
+    klog("early", "init IDT");
+
+    *(uint64_t *)0xdeadbeef = 42;
 
     hcf();
 }
