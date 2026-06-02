@@ -5,6 +5,8 @@
 #include <lib/term.h>
 #include <sys/moose.h>
 #include <util/printf.h>
+#include <sys/klog.h>
+#include <arch/gdt.h>
 
 #define FONT_PATH "/etc/fonts/tty.bdf"
 #define FONT_MAX_GPLHYS 2048
@@ -93,12 +95,10 @@ void kmain(void)
         hcf();
 
     term_init(moose_fb, &moose_font);
-    kprintf("Hello from %s kernel\n", "moose");
-    kprintf("%s %c %d %u 0x%x %p\n", "test", 'A', -123, 456, 0xdeadbeef, &moose_font);
-    kprintf("Loaded font:\n");
-    kprintf("  Family: %s\n", moose_font.props.family_name);
-    kprintf("  Copyright: %s\n", moose_font.props.copyright);
-    kprintf("  Notice: %s\n", moose_font.props.notice);
+    klog("early", "moose kernel v0.1.0");
+
+    gdt_init();
+    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);
 
     hcf();
 }
