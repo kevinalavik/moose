@@ -56,23 +56,25 @@ struct terminal
 
 static struct terminal term;
 
+/* yoinked straight from: https://web.mit.edu/freebsd/head/sys/dev/vt/colors/vt_termcolors.c */
+/* so credits to them */
 static const uint32_t ansi16[16] = {
-    0x001e1e2e,
-    0x00f38ba8,
-    0x00a6e3a1,
-    0x00f9e2af,
-    0x0089b4fa,
-    0x00cba6f7,
-    0x0094e2d5,
-    0x00cdd6f4,
-    0x00585b70,
-    0x00eba0ac,
-    0x00b4f9c0,
-    0x00fce8b2,
-    0x00a6c8ff,
-    0x00d8b4fe,
-    0x00aef3e7,
-    0x00f5f7ff,
+    RGB(0, 0, 0),       /* 0  Black         */
+    RGB(128, 0, 0),     /* 1  Dark Red      */
+    RGB(0, 128, 0),     /* 2  Dark Green    */
+    RGB(196, 160, 0),   /* 3  Dark Yellow   */
+    RGB(51, 102, 153),  /* 4  Dark Blue     */
+    RGB(128, 0, 128),   /* 5  Dark Magenta  */
+    RGB(0, 128, 128),   /* 6  Dark Cyan     */
+    RGB(191, 191, 191), /* 7  Light Gray    */
+    RGB(45, 51, 54),    /* 8  Dark Gray     */
+    RGB(255, 0, 0),     /* 9  Light Red     */
+    RGB(0, 255, 0),     /* 10 Light Green   */
+    RGB(255, 255, 0),   /* 11 Light Yellow  */
+    RGB(115, 158, 207), /* 12 Light Blue    */
+    RGB(255, 0, 255),   /* 13 Light Magenta */
+    RGB(0, 255, 255),   /* 14 Light Cyan    */
+    RGB(255, 255, 255), /* 15 White         */
 };
 
 static uint32_t rgb(uint32_t r, uint32_t g, uint32_t b)
@@ -958,7 +960,7 @@ static void ansi_csi_final(char c)
     }
 }
 
-static void ansi_reset_parser(void)
+static void COL_RESET_parser(void)
 {
     term.ansi_state = ANSI_NORMAL;
     term.ansi_param_count = 0;
@@ -994,39 +996,39 @@ static bool ansi_consume(char c)
         if (c == '7')
         {
             term_save_cursor();
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
         if (c == '8')
         {
             term_restore_cursor();
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
         if (c == 'D')
         {
             term_index();
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
         if (c == 'E')
         {
             term_newline();
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
         if (c == 'c')
         {
             term_reset();
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
-        ansi_reset_parser();
+        COL_RESET_parser();
         return true;
 
     case ANSI_CSI:
@@ -1052,11 +1054,11 @@ static bool ansi_consume(char c)
         if (c >= 0x40 && c <= 0x7e)
         {
             ansi_csi_final(c);
-            ansi_reset_parser();
+            COL_RESET_parser();
             return true;
         }
 
-        ansi_reset_parser();
+        COL_RESET_parser();
         return true;
     }
 

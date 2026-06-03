@@ -69,13 +69,13 @@ static inline const char *dev_status_string(dev_status_t status)
 
 static inline void dev_error(const char *msg)
 {
-    klog("dev", ANSI_BOLD_RED "dev error: %s" ANSI_RESET, msg);
+    klog("dev", COL_BRED "dev error: %s" COL_RESET, msg);
 }
 
 static inline void dev_error_status(const char *msg, dev_status_t status)
 {
     klog("dev",
-         ANSI_BOLD_RED "dev error: %s: %s" ANSI_RESET,
+         COL_BRED "dev error: %s: %s" COL_RESET,
          msg,
          dev_status_string(status));
 }
@@ -141,7 +141,7 @@ static inline size_t device_read(handle_t *handle, void *buf, size_t len)
     if (handle->ops->read == NULL)
     {
         klog("dev",
-             ANSI_BOLD_YELLOW "dev error: read unsupported on %s" ANSI_RESET,
+             COL_AMBER "dev error: read unsupported on %s" COL_RESET,
              handle->label ? handle->label : "unknown");
         return 0;
     }
@@ -169,7 +169,7 @@ static inline size_t device_write(handle_t *handle, const void *buf, size_t len)
     if (handle->ops->write == NULL)
     {
         klog("dev",
-             ANSI_BOLD_YELLOW "dev error: write unsupported on %s" ANSI_RESET,
+             COL_AMBER "dev error: write unsupported on %s" COL_RESET,
              handle->label ? handle->label : "unknown");
         return 0;
     }

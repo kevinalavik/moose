@@ -87,40 +87,40 @@ void kmain(void)
     if (com1.dev == NULL)
     {
         /* this is sort-of pointless rn since there will be no output if uart fails  since it inits before fb*/
-        klog("early", ANSI_YELLOW "failed to open COM1 device handle" ANSI_RESET);
+        klog("early", COL_AMBER "failed to open COM1 device handle" COL_RESET);
     }
 
     if (!framebuffer_request.response ||
         framebuffer_request.response->framebuffer_count < 1)
     {
-        klog("early", ANSI_BOLD_RED "failed to get framebuffer" ANSI_RESET);
+        klog("early", COL_BRED "failed to get framebuffer" COL_RESET);
         hcf(); /* this is a graphical OS so if no framebuffer available then fuck off*/
     }
 
     if (!module_request.response)
     {
-        klog("early", ANSI_BOLD_RED "failed to get kernel modules" ANSI_RESET);
+        klog("early", COL_BRED "failed to get kernel modules" COL_RESET);
         hcf();
     }
 
     moose_fb = framebuffer_request.response->framebuffers[0];
     if (!moose_fb || !moose_fb->address)
     {
-        klog("early", ANSI_BOLD_RED "invalid framebuffer" ANSI_RESET);
+        klog("early", COL_BRED "invalid framebuffer" COL_RESET);
         hcf();
     }
 
     /* todo: make term support any bpp aswell as color shift */
     if (moose_fb->bpp != 32)
     {
-        klog("early", ANSI_BOLD_RED "not a 32bpp framebuffer" ANSI_RESET);
+        klog("early", COL_BRED "not a 32bpp framebuffer" COL_RESET);
         hcf();
     }
 
     struct limine_file *font_file = find_module(FONT_PATH);
     if (!font_file)
     {
-        klog("early", ANSI_YELLOW "failed to get font: \"%s\". Is it in your limine.conf?" ANSI_RESET, FONT_PATH);
+        klog("early", COL_AMBER "failed to get font: \"%s\". Is it in your limine.conf?" COL_RESET, FONT_PATH);
     }
     else
     {
@@ -129,7 +129,7 @@ void kmain(void)
 
         if (bdf_parse((const char *)font_file->address, (size_t)font_file->size, &moose_font) != BDF_OK)
         {
-            klog("early", ANSI_YELLOW "failed to parse font: \"%s\"" ANSI_RESET, FONT_PATH);
+            klog("early", COL_AMBER "failed to parse font: \"%s\"" COL_RESET, FONT_PATH);
         }
         else
         {
@@ -149,14 +149,14 @@ void kmain(void)
 
     if (!memmap_request.response)
     {
-        klog("early", ANSI_BOLD_RED "failed to get memory map" ANSI_RESET);
+        klog("early", COL_BRED "failed to get memory map" COL_RESET);
         hcf();
     }
     moose_memmap = memmap_request.response;
 
     if (!hhdm_request.response)
     {
-        klog("early", ANSI_BOLD_RED "failed to get hhdm offset" ANSI_RESET);
+        klog("early", COL_BRED "failed to get hhdm offset" COL_RESET);
         hcf();
     }
     moose_hhdm_off = hhdm_request.response->offset;

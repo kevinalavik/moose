@@ -39,7 +39,7 @@ static com_dev_t *uart_get_dev(com_port_t port)
             return &com_devices[i];
     }
 
-    klog("uart", ANSI_YELLOW "unknown uart port %#x" ANSI_RESET, port);
+    klog("uart", COL_AMBER "unknown uart port %#x" COL_RESET, port);
     return NULL;
 }
 
@@ -179,7 +179,7 @@ static size_t uart_write(handle_t *handle, const void *buf, size_t len)
     if (written != len)
     {
         klog("uart",
-             ANSI_YELLOW "uart write timeout on %s" ANSI_RESET,
+             COL_AMBER "uart write timeout on %s" COL_RESET,
              dev->label);
     }
 
@@ -201,7 +201,7 @@ handle_t uart_init(com_port_t port)
     uart_hw_init(dev->port);
     if (!uart_probe(dev->port))
     {
-        klog("uart", ANSI_BOLD_RED "hw error: uart probe failed for %s at %#x" ANSI_RESET, dev->label, dev->port);
+        klog("uart", COL_BRED "hw error: uart probe failed for %s at %#x" COL_RESET, dev->label, dev->port);
         return HANDLE_INVALID;
     }
     return device_handle_make(dev, &uart_ops, dev->label);

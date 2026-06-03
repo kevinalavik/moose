@@ -90,13 +90,13 @@ void pmm_init(void)
 
     if (map_phys == (uint64_t)-1)
     {
-        klog("pmm", ANSI_RED "could not place page database (need %u MiB)" ANSI_RESET, (map_pages * PAGE_SIZE) / 1024 / 1024);
+        klog("pmm", COL_BRED "could not place page database (need %u MiB)" COL_RESET, (map_pages * PAGE_SIZE) / 1024 / 1024);
         return;
     }
 
     mem_map = (page_t *)PHYS_TO_VIRT(map_phys);
 
-    klog("pmm", ANSI_CYAN "page database @ %p (%u pages, %u MiB)" ANSI_RESET, mem_map, map_pages, (map_pages * PAGE_SIZE) / 1024 / 1024);
+    klog("pmm", COL_CYAN "page database @ %p (%u pages, %u MiB)" COL_RESET, mem_map, map_pages, (map_pages * PAGE_SIZE) / 1024 / 1024);
 
     for (uint64_t i = 0; i < total_pages; i++)
     {
@@ -138,14 +138,14 @@ void pmm_init(void)
         }
     }
 
-    klog("pmm", ANSI_CYAN "%u MiB free, %u MiB reserved" ANSI_RESET, (free_pages * PAGE_SIZE) / 1024 / 1024, (reserved_pages * PAGE_SIZE) / 1024 / 1024);
+    klog("pmm", COL_CYAN "%u MiB free, %u MiB reserved" COL_RESET, (free_pages * PAGE_SIZE) / 1024 / 1024, (reserved_pages * PAGE_SIZE) / 1024 / 1024);
 }
 
 void *pmm_alloc(void)
 {
     if (root == NULL)
     {
-        klog("pmm", ANSI_RED "out of physical memory" ANSI_RESET);
+        klog("pmm", COL_BRED "out of physical memory" COL_RESET);
         return NULL;
     }
 
@@ -156,7 +156,7 @@ void *pmm_alloc(void)
 
     if (!(p->flags & PAGE_FREE))
     {
-        klog("pmm", ANSI_RED "free list corruption @ %p" ANSI_RESET, p);
+        klog("pmm", COL_BRED "free list corruption @ %p" COL_RESET, p);
         return NULL;
     }
 
@@ -182,13 +182,13 @@ void pmm_ref(void *ptr)
 
     if (p == NULL)
     {
-        klog("pmm", ANSI_YELLOW "pmm_ref on out-of-range page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "pmm_ref on out-of-range page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (!(p->flags & PAGE_USED))
     {
-        klog("pmm", ANSI_YELLOW "pmm_ref on non-used page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "pmm_ref on non-used page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
@@ -205,19 +205,19 @@ void pmm_unref(void *ptr)
 
     if (p == NULL)
     {
-        klog("pmm", ANSI_YELLOW "pmm_unref on out-of-range page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "pmm_unref on out-of-range page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (!(p->flags & PAGE_USED))
     {
-        klog("pmm", ANSI_YELLOW "pmm_unref on non-used page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "pmm_unref on non-used page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (p->refcount == 0)
     {
-        klog("pmm", ANSI_YELLOW "pmm_unref on zero-refcount page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "pmm_unref on zero-refcount page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
@@ -231,7 +231,7 @@ void pmm_free(void *ptr)
 
     if (IS_NOT_ALIGNED((uintptr_t)ptr, PAGE_SIZE))
     {
-        klog("pmm", ANSI_YELLOW "tried to free unaligned page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "tried to free unaligned page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
@@ -240,25 +240,25 @@ void pmm_free(void *ptr)
 
     if (p == NULL)
     {
-        klog("pmm", ANSI_YELLOW "tried to free outside PMM range @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "tried to free outside PMM range @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (p->flags & PAGE_RESERVED)
     {
-        klog("pmm", ANSI_YELLOW "tried to free reserved page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "tried to free reserved page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (!(p->flags & PAGE_USED))
     {
-        klog("pmm", ANSI_YELLOW "tried to free non-used page @ %p, ignored" ANSI_RESET, ptr);
+        klog("pmm", COL_AMBER "tried to free non-used page @ %p, ignored" COL_RESET, ptr);
         return;
     }
 
     if (p->refcount > 0)
     {
-        klog("pmm", ANSI_YELLOW "tried to free referenced page @ %p (refcount=%u), ignored" ANSI_RESET,
+        klog("pmm", COL_AMBER "tried to free referenced page @ %p (refcount=%u), ignored" COL_RESET,
              ptr, p->refcount);
         return;
     }

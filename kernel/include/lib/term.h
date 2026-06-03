@@ -4,25 +4,28 @@
 #include <limine.h>
 #include <util/bdf.h>
 
-#define ANSI_RESET "\x1b[0m"
+/* colors */
+#define COL_RESET "\x1b[0m"
+#define COL_BLACK "\x1b[30m"
+#define COL_RED "\x1b[31m"
+#define COL_GREEN "\x1b[32m"
+#define COL_YELLOW "\x1b[33m"
+#define COL_BLUE "\x1b[34m"
+#define COL_MAGENTA "\x1b[35m"
+#define COL_CYAN "\x1b[36m"
+#define COL_WHITE "\x1b[37m"
 
-#define ANSI_BLACK "\x1b[30m"
-#define ANSI_RED "\x1b[31m"
-#define ANSI_GREEN "\x1b[32m"
-#define ANSI_YELLOW "\x1b[33m"
-#define ANSI_BLUE "\x1b[34m"
-#define ANSI_MAGENTA "\x1b[35m"
-#define ANSI_CYAN "\x1b[36m"
-#define ANSI_WHITE "\x1b[37m"
+/* bright colors */
+#define COL_GRAY "\x1b[1;30m"
+#define COL_BRED "\x1b[1;31m"
+#define COL_BGREEN "\x1b[1;32m"
+#define COL_AMBER "\x1b[1;33m"
+#define COL_STEEL "\x1b[1;34m"
+#define COL_VIOLET "\x1b[1;35m"
+#define COL_TEAL "\x1b[1;36m"
+#define COL_BRIGHT "\x1b[1;37m"
 
-#define ANSI_BOLD_BLACK "\x1b[1;30m"
-#define ANSI_BOLD_RED "\x1b[1;31m"
-#define ANSI_BOLD_GREEN "\x1b[1;32m"
-#define ANSI_BOLD_YELLOW "\x1b[1;33m"
-#define ANSI_BOLD_BLUE "\x1b[1;34m"
-#define ANSI_BOLD_MAGENTA "\x1b[1;35m"
-#define ANSI_BOLD_CYAN "\x1b[1;36m"
-#define ANSI_BOLD_WHITE "\x1b[1;37m"
+#define RGB(r, g, b) (((r) << 16) | ((g) << 8) | (b))
 
 void term_init(struct limine_framebuffer *fb, const BDF_Font *font);
 
