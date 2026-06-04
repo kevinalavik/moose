@@ -132,12 +132,9 @@ void kmain(void)
     if (font_file)
     {
         psf_font psf;
-
         if (psf_parse(font_file->address, (size_t)font_file->size, &psf) != PSF_OK)
             klog("early", COL_AMBER "failed to parse %s" COL_RESET, FONT_PATH_PSF);
-        else if (psf_to_tty(&psf, &moose_tty,
-                            tty_glyphs, FONT_MAX_GPLHYS,
-                            tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != PSF_OK)
+        else if (psf_to_tty(&psf, &moose_tty, tty_glyphs, FONT_MAX_GPLHYS, tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != PSF_OK)
             klog("early", COL_AMBER "failed to convert %s" COL_RESET, FONT_PATH_PSF);
         else
             term_ready = true;
@@ -153,9 +150,7 @@ void kmain(void)
 
             if (bdf_parse((const char *)font_file->address, (size_t)font_file->size, &moose_font) != BDF_OK)
                 klog("early", COL_AMBER "failed to parse %s" COL_RESET, FONT_PATH_BDF);
-            else if (bdf_to_tty(&moose_font, &moose_tty,
-                                tty_glyphs, FONT_MAX_GPLHYS,
-                                tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != BDF_OK)
+            else if (bdf_to_tty(&moose_font, &moose_tty, tty_glyphs, FONT_MAX_GPLHYS, tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != BDF_OK)
                 klog("early", COL_AMBER "failed to convert %s" COL_RESET, FONT_PATH_BDF);
             else
                 term_ready = true;
