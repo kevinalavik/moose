@@ -2,7 +2,7 @@
 #define LIB_TERM_H
 
 #include <limine.h>
-#include <util/bdf.h>
+#include <util/tty_font.h>
 
 /* colors */
 #define COL_RESET "\x1b[0m"
@@ -27,7 +27,7 @@
 
 #define RGB(r, g, b) (((r) << 16) | ((g) << 8) | (b))
 
-void term_init(struct limine_framebuffer *fb, const BDF_Font *font);
+void term_init(struct limine_framebuffer *fb, const tty_font *font);
 
 void term_putc(char c);
 void term_puts(const char *s);

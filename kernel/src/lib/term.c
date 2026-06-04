@@ -21,7 +21,7 @@ enum ansi_state
 struct terminal
 {
     struct limine_framebuffer *fb;
-    const BDF_Font *font;
+    const tty_font *font;
 
     uint32_t cx;
     uint32_t cy;
@@ -127,12 +127,12 @@ static uint32_t term_pitch(void)
 
 static uint32_t term_cw(void)
 {
-    return (uint32_t)term.font->bbox.w;
+    return term.font->width;
 }
 
 static uint32_t term_ch(void)
 {
-    return (uint32_t)term.font->bbox.h;
+    return term.font->height;
 }
 
 static uint32_t term_cols(void)
@@ -632,7 +632,7 @@ static void term_reset(void)
         term_clear_rect(0, 0, term.fb->width, term.fb->height, term_bg_color());
 }
 
-void term_init(struct limine_framebuffer *fb, const BDF_Font *font)
+void term_init(struct limine_framebuffer *fb, const tty_font *font)
 {
     term = (struct terminal){0};
 
@@ -1094,8 +1094,8 @@ static void term_put_glyph(char c)
 
     term_ensure_visible();
 
-    const BDF_Glyph *glyph =
-        bdf_glyph_for_codepoint(term.font, (unsigned char)c);
+    const tty_glyph *glyph =
+        tty_glyph_for_codepoint(term.font, (unsigned char)c);
 
     if (!glyph)
         glyph = &term.font->glyphs[0];
@@ -1108,24 +1108,23 @@ static void term_put_glyph(char c)
 
     term_clear_rect(term.cx, term.cy, cw, ch, bg);
 
-    uint8_t row[32];
+    uint32_t gw = glyph->width;
+    uint32_t gh = glyph->height;
 
-    for (int32_t r = 0; r < glyph->bbox.h; r++)
+    for (uint32_t r = 0; r < gh; r++)
     {
-        if (bdf_bitmap_row(glyph, (uint32_t)r, row, sizeof(row)) < 0)
-            continue;
-
-        uint32_t y = term.cy + (uint32_t)r;
+        const uint8_t *row = TTY_GLYPH_ROW(glyph, r);
+        uint32_t y = term.cy + r;
 
         if (y >= term.fb->height)
             continue;
 
-        for (int32_t col = 0; col < glyph->bbox.w; col++)
+        for (uint32_t col = 0; col < gw; col++)
         {
-            if ((uint32_t)col >= cw)
+            if (col >= cw)
                 break;
 
-            uint32_t x = term.cx + (uint32_t)col;
+            uint32_t x = term.cx + col;
 
             if (x >= term.fb->width)
                 continue;
@@ -1222,4 +1221,14 @@ void term_puts(const char *s)
 
     while (*s)
         term_putc(*s++);
+}
+
+const tty_glyph *tty_glyph_for_codepoint(const tty_font *font, uint32_t cp)
+{
+    if (!font || !font->glyphs)
+        return NULL;
+    for (uint32_t i = 0; i < font->glyph_count; i++)
+        if (font->glyphs[i].codepoint == cp)
+            return &font->glyphs[i];
+    return NULL;
 }

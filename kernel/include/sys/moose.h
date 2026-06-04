@@ -13,6 +13,6 @@ extern uintptr_t moose_hhdm_off;
 #define VIRT_TO_PHYS(v) ((uintptr_t)(v) - moose_hhdm_off)
 #define IS_HHDM(v) ((uintptr_t)(v) >= moose_hhdm_off)
 
-extern BDF_Font moose_font;
+extern bdf_font moose_font;
 
 #endif /* SYS_MOOSE_H */

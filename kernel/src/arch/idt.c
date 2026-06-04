@@ -3,6 +3,7 @@
 #include <sys/klog.h>
 #include <lib/term.h>
 #include <arch/gdt.h>
+#include <stdbool.h>
 
 __attribute__((aligned(16))) static idt_entry_t idt[256];
 static idtr_t idtr;

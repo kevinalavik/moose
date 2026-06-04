@@ -1,6 +1,8 @@
 #include <limine.h>
 #define BDF_IMPLEMENTATION
+#define PSF_IMPLEMENTATION
 #include <util/bdf.h>
+#include <util/psf.h>
 #include <lib/string.h>
 #include <lib/term.h>
 #include <sys/moose.h>
@@ -13,8 +15,10 @@
 #include <mm/pmm.h>
 #include <lib/math.h>
 
-#define FONT_PATH "/etc/fonts/tty/early.bdf"
+#define FONT_PATH_BDF "/fonts/tty.bdf"
+#define FONT_PATH_PSF "/fonts/tty.psf"
 #define FONT_MAX_GPLHYS 2048
+#define TTY_BITMAP_POOL_SIZE (FONT_MAX_GPLHYS * 64u)
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -46,8 +50,12 @@ struct limine_memmap_response *moose_memmap = NULL;
 
 uintptr_t moose_hhdm_off = 0;
 
-BDF_Font moose_font;
-static BDF_Glyph glyphs[FONT_MAX_GPLHYS];
+bdf_font moose_font;
+static bdf_glyph bdf_glyphs[FONT_MAX_GPLHYS];
+
+tty_font moose_tty;
+static tty_glyph tty_glyphs[FONT_MAX_GPLHYS];
+static uint8_t tty_bitmap_pool[TTY_BITMAP_POOL_SIZE];
 
 handle_t com1;
 int putc(char ch)
@@ -117,29 +125,52 @@ void kmain(void)
         hcf();
     }
 
-    struct limine_file *font_file = find_module(FONT_PATH);
-    if (!font_file)
-    {
-        klog("early", COL_AMBER "failed to get font: \"%s\". Is it in your limine.conf?" COL_RESET, FONT_PATH);
-    }
-    else
-    {
-        moose_font.glyphs = glyphs;
-        moose_font.glyphs_capacity = FONT_MAX_GPLHYS;
+    struct limine_file *font_file;
+    bool term_ready = false;
 
-        if (bdf_parse((const char *)font_file->address, (size_t)font_file->size, &moose_font) != BDF_OK)
-        {
-            klog("early", COL_AMBER "failed to parse font: \"%s\"" COL_RESET, FONT_PATH);
-        }
+    font_file = find_module(FONT_PATH_PSF);
+    if (font_file)
+    {
+        psf_font psf;
+
+        if (psf_parse(font_file->address, (size_t)font_file->size, &psf) != PSF_OK)
+            klog("early", COL_AMBER "failed to parse %s" COL_RESET, FONT_PATH_PSF);
+        else if (psf_to_tty(&psf, &moose_tty,
+                            tty_glyphs, FONT_MAX_GPLHYS,
+                            tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != PSF_OK)
+            klog("early", COL_AMBER "failed to convert %s" COL_RESET, FONT_PATH_PSF);
         else
+            term_ready = true;
+    }
+
+    if (!term_ready)
+    {
+        font_file = find_module(FONT_PATH_BDF);
+        if (font_file)
         {
-            term_init(moose_fb, &moose_font);
+            moose_font.glyphs = bdf_glyphs;
+            moose_font.glyphs_capacity = FONT_MAX_GPLHYS;
+
+            if (bdf_parse((const char *)font_file->address, (size_t)font_file->size, &moose_font) != BDF_OK)
+                klog("early", COL_AMBER "failed to parse %s" COL_RESET, FONT_PATH_BDF);
+            else if (bdf_to_tty(&moose_font, &moose_tty,
+                                tty_glyphs, FONT_MAX_GPLHYS,
+                                tty_bitmap_pool, TTY_BITMAP_POOL_SIZE) != BDF_OK)
+                klog("early", COL_AMBER "failed to convert %s" COL_RESET, FONT_PATH_BDF);
+            else
+                term_ready = true;
         }
     }
+
+    if (!font_file)
+        klog("early", COL_AMBER "no font module found. add tty.bdf, tty.psf to limine.conf" COL_RESET);
+
+    if (term_ready)
+        term_init(moose_fb, &moose_tty);
 
     klog("early", "moose kernel v0.1.0");
-    if (moose_font.glyphs != NULL)
-        klog("early", "using font: %s (%dx%d)", moose_font.props.family_name, moose_font.bbox.w, moose_font.bbox.h);
+    if (term_ready)
+        klog("early", "using font %dx%d", moose_tty.width, moose_tty.height);
 
     gdt_init();
     klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);

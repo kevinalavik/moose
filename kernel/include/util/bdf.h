@@ -1,16 +1,11 @@
-/*
- * bdf.h - freestanding stb-styled BDF parser, no stdlib.
- * Requires <stddef.h>, <stdint.h>, <stdbool.h> (freestanding POSIX).
- * Zero allocation - caller supplies all storage.
- * bitmap_start points into the source buffer; keep it alive.
- *
- * Under public domain, feel free to user it anywhere when you need this cursed font (you should prob use PSF)
- */
 #ifndef UTIL_BDF_H
 #define UTIL_BDF_H
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#include <util/tty_font.h>
 
 #ifndef BDF_MAX_UNKNOWN_PROPS
 #define BDF_MAX_UNKNOWN_PROPS 64
@@ -28,18 +23,19 @@
 typedef struct
 {
     int32_t w, h, x, y;
-} BDF_BBox;
+} bdf_bbox;
 
 typedef struct
 {
     char key[BDF_PROP_KEY_MAX];
     char value[BDF_PROP_VALUE_MAX];
-} BDF_UnknownProp;
+} bdf_unknown_prop;
+
 typedef struct
 {
     char key[BDF_PROP_KEY_MAX];
     char value[BDF_PROP_VALUE_MAX];
-} BDF_UnknownGlyphField;
+} bdf_unknown_glyph_field;
 
 typedef struct
 {
@@ -59,9 +55,9 @@ typedef struct
     int32_t superscript_x, superscript_y, subscript_x, subscript_y;
     int32_t superscript_size, subscript_size, small_caps_size;
     int32_t raw_ascent, raw_descent;
-    BDF_UnknownProp unknowns[BDF_MAX_UNKNOWN_PROPS];
+    bdf_unknown_prop unknowns[BDF_MAX_UNKNOWN_PROPS];
     uint32_t n_unknowns;
-} BDF_Properties;
+} bdf_properties;
 
 typedef struct
 {
@@ -71,28 +67,28 @@ typedef struct
     int32_t swidth2_x, swidth2_y, dwidth2_x, dwidth2_y;
     int32_t vvector_x, vvector_y;
     bool has_vvector;
-    BDF_BBox bbox;
+    bdf_bbox bbox;
     const char *bitmap_start;
     uint32_t bitmap_rows, bitmap_stride;
-    BDF_UnknownGlyphField unknowns[BDF_MAX_UNKNOWN_GLYPH_FIELDS];
+    bdf_unknown_glyph_field unknowns[BDF_MAX_UNKNOWN_GLYPH_FIELDS];
     uint32_t n_unknowns;
-} BDF_Glyph;
+} bdf_glyph;
 
 typedef struct
 {
     char version[16], font_name[256];
     int32_t point_size, x_res, y_res;
-    BDF_BBox bbox;
+    bdf_bbox bbox;
     int32_t metrics_set;
     int32_t swidth2_x, swidth2_y, dwidth2_x, dwidth2_y;
     int32_t vvector_x, vvector_y;
     bool has_global_vvector;
-    BDF_Properties props;
+    bdf_properties props;
     bool has_props;
     uint32_t chars_declared, chars_parsed;
-    BDF_Glyph *glyphs;
+    bdf_glyph *glyphs;
     uint32_t glyphs_capacity;
-} BDF_Font;
+} bdf_font;
 
 typedef enum
 {
@@ -102,12 +98,16 @@ typedef enum
     BDF_ERR_OVERFLOW = -3,
     BDF_ERR_BITMAP = -4,
     BDF_ERR_TRUNCATED = -5,
-} BDF_Result;
+    BDF_ERR_POOL = -6,
+} bdf_result;
 
-BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font);
-const BDF_Glyph *bdf_glyph_for_codepoint(const BDF_Font *font, int32_t cp);
-int32_t bdf_bitmap_row(const BDF_Glyph *g, uint32_t row, uint8_t *out, size_t cap);
-const char *bdf_result_str(BDF_Result r);
+bdf_result bdf_parse(const char *src, size_t src_len, bdf_font *font);
+const bdf_glyph *bdf_glyph_for_codepoint(const bdf_font *font, int32_t cp);
+int32_t bdf_bitmap_row(const bdf_glyph *g, uint32_t row, uint8_t *out, size_t cap);
+const char *bdf_result_str(bdf_result r);
+bdf_result bdf_to_tty(bdf_font *font, tty_font *tty,
+                      tty_glyph *glyphs, uint32_t glyph_cap,
+                      uint8_t *pool, size_t pool_cap);
 
 #ifdef BDF_IMPLEMENTATION
 
@@ -118,12 +118,14 @@ static size_t bdf__strlen(const char *s)
         n++;
     return n;
 }
+
 static const char *bdf__skip_ws(const char *p)
 {
     while (*p == ' ' || *p == '\t')
         p++;
     return p;
 }
+
 static void bdf__memset(void *d, int c, size_t n)
 {
     unsigned char *p = d;
@@ -214,10 +216,10 @@ typedef struct
 {
     const char *src;
     size_t len, pos;
-} BDF__Buf;
+} bdf__buf;
 #define BDF__LINE_CAP 1280
 
-static bool bdf__getline(BDF__Buf *b, char *line, const char **rs)
+static bool bdf__getline(bdf__buf *b, char *line, const char **rs)
 {
     if (b->pos >= b->len)
         return false;
@@ -238,7 +240,7 @@ static bool bdf__getline(BDF__Buf *b, char *line, const char **rs)
     return true;
 }
 
-static void bdf__parse_props(BDF__Buf *b, BDF_Properties *pr)
+static void bdf__parse_props(bdf__buf *b, bdf_properties *pr)
 {
     char line[BDF__LINE_CAP];
     pr->pixel_size = pr->point_size = pr->resolution_x = pr->resolution_y = INT32_MIN;
@@ -314,7 +316,7 @@ static void bdf__parse_props(BDF__Buf *b, BDF_Properties *pr)
         SS(destination, "DESTINATION")
         else if (pr->n_unknowns < BDF_MAX_UNKNOWN_PROPS)
         {
-            BDF_UnknownProp *u = &pr->unknowns[pr->n_unknowns++];
+            bdf_unknown_prop *u = &pr->unknowns[pr->n_unknowns++];
             bdf__token(p, u->key, sizeof u->key);
             bdf__rest(p + bdf__strlen(u->key), u->value, sizeof u->value);
         }
@@ -327,31 +329,31 @@ static void bdf__parse_props(BDF__Buf *b, BDF_Properties *pr)
 
 typedef enum
 {
-    PS_HEADER,
-    PS_CHARS,
-    PS_GLYPH,
-    PS_BITMAP,
-    PS_DONE
-} BDF__PState;
+    BDF__PS_HEADER,
+    BDF__PS_CHARS,
+    BDF__PS_GLYPH,
+    BDF__PS_BITMAP,
+    BDF__PS_DONE
+} bdf__pstate;
 
-BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font)
+bdf_result bdf_parse(const char *src, size_t src_len, bdf_font *font)
 {
     if (!src || !font)
         return BDF_ERR_NULL;
     if (font->glyphs_capacity && !font->glyphs)
         return BDF_ERR_NULL;
 
-    BDF_Glyph *gp = font->glyphs;
+    bdf_glyph *gp = font->glyphs;
     uint32_t gc = font->glyphs_capacity;
     bdf__memset(font, 0, sizeof *font);
     font->glyphs = gp;
     font->glyphs_capacity = gc;
 
-    BDF__Buf buf = {src, src_len, 0};
-    BDF__PState state = PS_HEADER;
-    BDF_Result ret = BDF_OK;
+    bdf__buf buf = {src, src_len, 0};
+    bdf__pstate state = BDF__PS_HEADER;
+    bdf_result ret = BDF_OK;
     char line[BDF__LINE_CAP];
-    BDF_Glyph cur;
+    bdf_glyph cur;
     bdf__memset(&cur, 0, sizeof cur);
 
 #define V(k) (p + bdf__strlen(k))
@@ -367,7 +369,7 @@ BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font)
             continue;
         switch (state)
         {
-        case PS_HEADER:
+        case BDF__PS_HEADER:
             if (bdf__kw(p, "STARTFONT"))
                 bdf__token(V("STARTFONT"), font->version, sizeof font->version);
             else if (bdf__kw(p, "FONT"))
@@ -415,24 +417,24 @@ BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font)
             {
                 const char *v = V("CHARS");
                 font->chars_declared = (uint32_t)bdf__int(&v);
-                state = PS_CHARS;
+                state = BDF__PS_CHARS;
             }
             else if (bdf__kw(p, "ENDFONT"))
-                state = PS_DONE;
+                state = BDF__PS_DONE;
             break;
-        case PS_CHARS:
+        case BDF__PS_CHARS:
             if (bdf__kw(p, "STARTCHAR"))
             {
                 bdf__memset(&cur, 0, sizeof cur);
                 cur.encoding = cur.encoding2 = -1;
                 cur.bbox = font->bbox;
                 bdf__rest(V("STARTCHAR"), cur.name, sizeof cur.name);
-                state = PS_GLYPH;
+                state = BDF__PS_GLYPH;
             }
             else if (bdf__kw(p, "ENDFONT"))
-                state = PS_DONE;
+                state = BDF__PS_DONE;
             break;
-        case PS_GLYPH:
+        case BDF__PS_GLYPH:
             if (bdf__kw(p, "ENCODING"))
             {
                 const char *v = V("ENCODING");
@@ -475,7 +477,7 @@ BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font)
                 cur.bitmap_stride = ((uint32_t)cur.bbox.w + 7u) / 8u * 2u;
                 cur.bitmap_rows = (uint32_t)cur.bbox.h;
                 cur.bitmap_start = src + buf.pos;
-                state = PS_BITMAP;
+                state = BDF__PS_BITMAP;
             }
             else if (bdf__kw(p, "ENDCHAR"))
             {
@@ -483,37 +485,37 @@ BDF_Result bdf_parse(const char *src, size_t src_len, BDF_Font *font)
                     font->glyphs[font->chars_parsed++] = cur;
                 else
                     ret = BDF_ERR_OVERFLOW;
-                state = PS_CHARS;
+                state = BDF__PS_CHARS;
             }
             else if (cur.n_unknowns < BDF_MAX_UNKNOWN_GLYPH_FIELDS)
             {
-                BDF_UnknownGlyphField *u = &cur.unknowns[cur.n_unknowns++];
+                bdf_unknown_glyph_field *u = &cur.unknowns[cur.n_unknowns++];
                 bdf__token(p, u->key, sizeof u->key);
                 bdf__rest(p + bdf__strlen(u->key), u->value, sizeof u->value);
             }
             break;
-        case PS_BITMAP:
+        case BDF__PS_BITMAP:
             if (bdf__kw(p, "ENDCHAR"))
             {
                 if (font->chars_parsed < font->glyphs_capacity)
                     font->glyphs[font->chars_parsed++] = cur;
                 else
                     ret = BDF_ERR_OVERFLOW;
-                state = PS_CHARS;
+                state = BDF__PS_CHARS;
             }
             break;
-        case PS_DONE:
+        case BDF__PS_DONE:
             break;
         }
     }
 #undef I2
 #undef V
-    if (state != PS_DONE && ret == BDF_OK)
+    if (state != BDF__PS_DONE && ret == BDF_OK)
         ret = BDF_ERR_TRUNCATED;
     return ret;
 }
 
-const BDF_Glyph *bdf_glyph_for_codepoint(const BDF_Font *font, int32_t cp)
+const bdf_glyph *bdf_glyph_for_codepoint(const bdf_font *font, int32_t cp)
 {
     if (!font || !font->glyphs)
         return NULL;
@@ -523,7 +525,7 @@ const BDF_Glyph *bdf_glyph_for_codepoint(const BDF_Font *font, int32_t cp)
     return NULL;
 }
 
-int32_t bdf_bitmap_row(const BDF_Glyph *g, uint32_t row, uint8_t *out, size_t cap)
+int32_t bdf_bitmap_row(const bdf_glyph *g, uint32_t row, uint8_t *out, size_t cap)
 {
     if (!g || !out || !g->bitmap_start || row >= g->bitmap_rows)
         return -1;
@@ -548,7 +550,7 @@ int32_t bdf_bitmap_row(const BDF_Glyph *g, uint32_t row, uint8_t *out, size_t ca
     return (int32_t)nb;
 }
 
-const char *bdf_result_str(BDF_Result r)
+const char *bdf_result_str(bdf_result r)
 {
     switch (r)
     {
@@ -564,10 +566,89 @@ const char *bdf_result_str(BDF_Result r)
         return "malformed bitmap data";
     case BDF_ERR_TRUNCATED:
         return "file ends before ENDFONT";
+    case BDF_ERR_POOL:
+        return "bitmap pool exhausted";
     default:
         return "unknown error";
     }
 }
 
-#endif /* BDF_IMPLEMENTATION */
-#endif /* UTIL_BDF_H */
+static uint32_t bdf__decode_row(const char *hex, uint32_t hex_stride,
+                                uint8_t *dst, uint32_t dst_cap)
+{
+    uint32_t nb = hex_stride / 2u;
+    if (nb > dst_cap)
+        nb = dst_cap;
+    for (uint32_t i = 0; i < nb; i++)
+    {
+        uint8_t hi = bdf__xdigit(hex[i * 2]);
+        uint8_t lo = bdf__xdigit(hex[i * 2 + 1]);
+        if (hi == 0xff || lo == 0xff)
+            return 0;
+        dst[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return nb;
+}
+
+bdf_result bdf_to_tty(bdf_font *font, tty_font *tty,
+                      tty_glyph *glyphs, uint32_t glyph_cap,
+                      uint8_t *pool, size_t pool_cap)
+{
+    if (!font || !tty || !glyphs || !pool)
+        return BDF_ERR_NULL;
+    if (font->chars_parsed > glyph_cap)
+        return BDF_ERR_OVERFLOW;
+
+    tty->glyph_count = 0;
+    tty->width = (uint32_t)font->bbox.w;
+    tty->height = (uint32_t)font->bbox.h;
+    tty->glyphs = glyphs;
+    tty->bitmap_pool = pool;
+    tty->bitmap_pool_size = 0;
+    tty->bitmap_pool_cap = pool_cap;
+
+    size_t used = 0;
+
+    for (uint32_t i = 0; i < font->chars_parsed; i++)
+    {
+        bdf_glyph *src = &font->glyphs[i];
+        tty_glyph *dst = &glyphs[i];
+
+        uint32_t gw = (uint32_t)src->bbox.w;
+        uint32_t gh = (uint32_t)src->bbox.h;
+        uint32_t stride = TTY_STRIDE(gw);
+        size_t need = stride * gh;
+
+        if (used + need > pool_cap)
+            return BDF_ERR_POOL;
+
+        const char *hex = src->bitmap_start;
+        for (uint32_t r = 0; r < gh; r++)
+        {
+            uint8_t *row = pool + used + r * stride;
+            uint32_t got = bdf__decode_row(hex, src->bitmap_stride, row, stride);
+            (void)got;
+
+            while (*hex && *hex != '\n')
+                hex++;
+            if (*hex == '\n')
+                hex++;
+        }
+
+        dst->codepoint = (uint32_t)(src->encoding >= 0 ? src->encoding : 0);
+        dst->width = gw;
+        dst->height = gh;
+        dst->x_offset = 0;
+        dst->y_offset = 0;
+        dst->bitmap = pool + used;
+
+        used += need;
+    }
+
+    tty->glyph_count = font->chars_parsed;
+    tty->bitmap_pool_size = used;
+    return BDF_OK;
+}
+
+#endif
+#endif
