@@ -1,10 +1,11 @@
-#ifndef LIB_TERM_H
-#define LIB_TERM_H
+#ifndef TERM_ANSI_H
+#define TERM_ANSI_H
 
-#include <limine.h>
-#include <util/tty_font.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-/* colors */
+#define ANSI_PARAM_CAP 16
+
 #define COL_RESET "\x1b[0m"
 #define COL_BLACK "\x1b[30m"
 #define COL_RED "\x1b[31m"
@@ -15,7 +16,6 @@
 #define COL_CYAN "\x1b[36m"
 #define COL_WHITE "\x1b[37m"
 
-/* bright colors */
 #define COL_GRAY "\x1b[1;30m"
 #define COL_BRED "\x1b[1;31m"
 #define COL_BGREEN "\x1b[1;32m"
@@ -25,11 +25,26 @@
 #define COL_TEAL "\x1b[1;36m"
 #define COL_BRIGHT "\x1b[1;37m"
 
-#define RGB(r, g, b) (((r) << 16) | ((g) << 8) | (b))
+enum ansi_result
+{
+    ANSI_NORMAL,
+    ANSI_PENDING,
+    ANSI_READY,
+};
 
-void term_init(struct limine_framebuffer *fb, const tty_font *font);
+struct ansi_parser
+{
+    int state;
+    char final;
+    bool simple;
+    bool private;
+    int params[ANSI_PARAM_CAP];
+    uint32_t param_count;
+    uint32_t value;
+    bool have_value;
+};
 
-void term_putc(char c);
-void term_puts(const char *s);
+void ansi_init(struct ansi_parser *p);
+enum ansi_result ansi_feed(struct ansi_parser *p, char c);
 
-#endif /* LIB_TERM_H */
+#endif /* TERM_ANSI_H */

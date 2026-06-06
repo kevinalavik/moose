@@ -2,7 +2,6 @@
 #define SYS_KLOG_H
 
 #include <util/printf.h>
-#include <lib/term.h>
 
 #define klog(tag, fmt, ...) \
     kprintf("[" tag "] " fmt "\n", ##__VA_ARGS__)

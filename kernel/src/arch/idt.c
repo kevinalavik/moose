@@ -1,7 +1,7 @@
 #include <arch/idt.h>
 #include <arch/cpu.h>
 #include <sys/klog.h>
-#include <lib/term.h>
+#include <dev/tty.h>
 #include <arch/gdt.h>
 #include <stdbool.h>
 

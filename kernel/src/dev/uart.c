@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <arch/cpu.h>
 #include <dev/uart.h>
-#include <lib/term.h>
+#include <dev/tty.h>
 #include <sys/klog.h>
 
 #define UART_DATA 0

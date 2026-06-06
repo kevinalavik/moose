@@ -1,6 +1,6 @@
 #include <arch/gdt.h>
 #include <sys/klog.h>
-#include <lib/term.h>
+#include <dev/tty.h>
 
 #define GDT_ENTRY(seg_base, seg_limit, access_byte, flags_byte) \
     {                                                           \

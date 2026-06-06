@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/klog.h>
-#include <lib/term.h>
+#include <dev/tty.h>
 #include <lib/math.h>
 
 page_t *root = NULL;
