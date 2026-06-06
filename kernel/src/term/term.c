@@ -1,13 +1,28 @@
 #include <term/term.h>
+#include <lib/heap.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <lib/string.h>
 
-#define TERM_DEFAULT_FG 3
+#define TERM_DEFAULT_FG 7
 #define TERM_DEFAULT_BG 0
-
 #define TAB_WIDTH 8
+#define TERM_INLINE_POOL 0x200000
+
+/* basic inline terminal  allocator which doesnt rely on pmm or anything */
+static char term_inline_pool[TERM_INLINE_POOL];
+static size_t term_inline_used;
+
+static void *term_alloc(size_t size)
+{
+    size = (size + 7) & ~(size_t)7;
+    if (term_inline_used + size > TERM_INLINE_POOL)
+        return NULL;
+    void *p = term_inline_pool + term_inline_used;
+    term_inline_used += size;
+    return p;
+}
 
 static void term_reset(term_t *t);
 static int param(term_t *t, uint32_t i, int fallback);
@@ -15,9 +30,9 @@ static int param(term_t *t, uint32_t i, int fallback);
 typedef struct
 {
     uint8_t r, g, b;
-} rgb888_t;
+} rgb_t;
 
-static const rgb888_t ansi16_rgb[16] = {
+static const rgb_t ansi16_rgb[16] = {
     {0, 0, 0},
     {170, 0, 0},
     {0, 170, 0},
@@ -40,7 +55,6 @@ static uint32_t rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
     struct limine_framebuffer *fb = t->fb;
     uint32_t color = 0;
-
     if (fb->red_mask_size)
     {
         uint32_t v = r;
@@ -62,27 +76,7 @@ static uint32_t rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
             v >>= 8 - fb->blue_mask_size;
         color |= v << fb->blue_mask_shift;
     }
-
     return color;
-}
-
-static inline uint32_t fb_mask(uint8_t size)
-{
-    if (size >= 32)
-        return 0xFFFFFFFF;
-    return ((uint32_t)1 << size) - 1;
-}
-
-static uint32_t cursor_mask(term_t *t)
-{
-    uint32_t m = 0;
-    if (t->fb->red_mask_size)
-        m |= fb_mask(t->fb->red_mask_size) << t->fb->red_mask_shift;
-    if (t->fb->green_mask_size)
-        m |= fb_mask(t->fb->green_mask_size) << t->fb->green_mask_shift;
-    if (t->fb->blue_mask_size)
-        m |= fb_mask(t->fb->blue_mask_size) << t->fb->blue_mask_shift;
-    return m;
 }
 
 static uint32_t cube_value(uint32_t n)
@@ -94,21 +88,16 @@ static uint32_t ansi_color(term_t *t, uint16_t n)
 {
     if (n < 16)
         return rgb(t, ansi16_rgb[n].r, ansi16_rgb[n].g, ansi16_rgb[n].b);
-
     if (n < 232)
     {
         uint32_t v = n - 16;
-        return rgb(t, cube_value(v / 36),
-                   cube_value((v / 6) % 6),
-                   cube_value(v % 6));
+        return rgb(t, cube_value(v / 36), cube_value((v / 6) % 6), cube_value(v % 6));
     }
-
     if (n < 256)
     {
         uint32_t v = 8 + (n - 232) * 10;
         return rgb(t, v, v, v);
     }
-
     return rgb(t, ansi16_rgb[TERM_DEFAULT_FG].r,
                ansi16_rgb[TERM_DEFAULT_FG].g,
                ansi16_rgb[TERM_DEFAULT_FG].b);
@@ -119,16 +108,8 @@ static volatile uint8_t *pixels(term_t *t)
     return (volatile uint8_t *)t->fb->address;
 }
 
-static uint32_t pitch(term_t *t)
-{
-    return (uint32_t)t->fb->pitch;
-}
-
-static uint32_t fb_bpb(term_t *t)
-{
-    return t->fb->bpp / 8;
-}
-
+static uint32_t pitch(term_t *t) { return (uint32_t)t->fb->pitch; }
+static uint32_t fb_bpb(term_t *t) { return t->fb->bpp / 8; }
 static uint32_t cw(term_t *t) { return t->font.width; }
 static uint32_t ch(term_t *t) { return t->font.height; }
 
@@ -225,7 +206,6 @@ static void clear_rect(term_t *t,
         return;
     if (x0 >= t->fb->width || y0 >= t->fb->height)
         return;
-
     if (x0 + w > t->fb->width)
         w = t->fb->width - x0;
     if (y0 + h > t->fb->height)
@@ -243,28 +223,86 @@ static void clear_rect(term_t *t,
     }
 }
 
-static void scroll_pixels(term_t *t, uint32_t amount)
+static void clear_cells(term_t *t, uint32_t r0, uint32_t c0,
+                        uint32_t nr, uint32_t nc)
 {
-    if (!t->fb || !t->fb->address || amount == 0)
-        return;
+    uint32_t fgp = fg_col(t), bgp = bg_col(t);
+    for (uint32_t r = r0; r < r0 + nr && r < t->num_rows; r++)
+        for (uint32_t c = c0; c < c0 + nc && c < t->num_cols; c++)
+        {
+            cell_t *cell = &t->cells[r * t->num_cols + c];
+            cell->c = ' ';
+            cell->fg = fgp;
+            cell->bg = bgp;
+        }
+}
 
-    if (amount >= t->fb->height)
-    {
-        clear_rect(t, 0, 0, t->fb->width, t->fb->height, bg_col(t));
-        return;
-    }
+static void draw_cell(term_t *t, uint32_t r, uint32_t c)
+{
+    cell_t *cell = &t->cells[r * t->num_cols + c];
+    uint32_t cw_ = cw(t), ch_ = ch(t);
+    uint32_t x = c * cw_;
+    uint32_t y = r * ch_;
 
+    clear_rect(t, x, y, cw_, ch_, cell->bg);
+
+    uint32_t idx = psf_glyph_index(&t->font, cell->c);
     volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
-    uint32_t h = t->fb->height - amount;
-    size_t row_bytes = t->fb->width * fb_bpb(t);
+    uint32_t bpb = fb_bpb(t);
 
-    for (uint32_t y = 0; y < h; y++)
+    for (uint32_t rv = 0; rv < ch_; rv++)
     {
-        memmove((void *)(fb + y * pt), (void *)(fb + (y + amount) * pt), row_bytes);
+        const uint8_t *rd = psf_glyph_row(&t->font, idx, rv);
+        uint32_t yo = y + rv;
+        if (yo >= t->fb->height)
+            continue;
+        for (uint32_t xo = 0; xo < cw_; xo++)
+        {
+            if (xo >= cw_)
+                break;
+            uint32_t xp = x + xo;
+            if (xp >= t->fb->width)
+                continue;
+            if ((rd[xo / 8] >> (7 - (xo % 8))) & 1)
+            {
+                volatile uint32_t *p = (volatile uint32_t *)(fb + yo * pt + xp * bpb);
+                *p = cell->fg;
+            }
+        }
     }
+}
 
-    clear_rect(t, 0, h, t->fb->width, amount, bg_col(t));
+static void scroll_pixels(term_t *t, uint32_t amount)
+{
+    uint32_t cw_ = cw(t), ch_ = ch(t);
+    if (cw_ == 0 || ch_ == 0 || amount == 0)
+        return;
+
+    uint32_t lines = (amount + ch_ - 1) / ch_;
+    if (lines > t->num_rows)
+        lines = t->num_rows;
+
+    uint32_t ncols = t->num_cols;
+    uint32_t stride = ncols;
+
+    for (uint32_t r = 0; r < t->num_rows - lines; r++)
+        for (uint32_t c = 0; c < ncols; c++)
+            t->cells[r * stride + c] = t->cells[(r + lines) * stride + c];
+
+    uint32_t fgp = fg_col(t), bgp = bg_col(t);
+    for (uint32_t r = t->num_rows - lines; r < t->num_rows; r++)
+        for (uint32_t c = 0; c < ncols; c++)
+        {
+            cell_t *cell = &t->cells[r * stride + c];
+            cell->c = ' ';
+            cell->fg = fgp;
+            cell->bg = bgp;
+        }
+
+    for (uint32_t r = 0; r < t->num_rows; r++)
+        for (uint32_t c = 0; c < ncols; c++)
+            draw_cell(t, r, c);
 }
 
 static void scroll_lines(term_t *t, uint32_t n)
@@ -280,13 +318,11 @@ static void ensure_visible(term_t *t)
     uint32_t h = ch(t);
     if (!t->fb || h == 0)
         return;
-
     if (h > t->fb->height)
     {
         t->cy = 0;
         return;
     }
-
     if (t->cy + h > t->fb->height)
     {
         uint32_t overflow = t->cy + h - t->fb->height;
@@ -299,33 +335,52 @@ static void ensure_visible(term_t *t)
     }
 }
 
-static void cursor_flip(term_t *t)
+static void cursor_draw(term_t *t, uint32_t cx, uint32_t cy, bool show)
 {
-    if (!t->fb || !t->fb->address)
-        return;
-
     uint32_t cw_ = cw(t), ch_ = ch(t);
     if (cw_ == 0 || ch_ == 0)
         return;
-    if (t->cx + cw_ > t->fb->width || t->cy + ch_ > t->fb->height)
+    if (cx + cw_ > t->fb->width || cy + ch_ > t->fb->height)
         return;
 
-    uint32_t bpb = fb_bpb(t);
-    uint32_t cmask = cursor_mask(t);
+    uint32_t row = cy / ch_;
+    uint32_t col = cx / cw_;
+
+    if (!show)
+    {
+        draw_cell(t, row, col);
+        return;
+    }
+
+    cell_t *cell = &t->cells[row * t->num_cols + col];
+    uint32_t fg = cell->fg;
+    uint32_t bg = cell->bg;
+
+    clear_rect(t, cx, cy, cw_, ch_, fg);
+
+    uint32_t idx = psf_glyph_index(&t->font, cell->c);
     volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
+    uint32_t bpb = fb_bpb(t);
 
-    for (uint32_t y = 0; y < ch_; y++)
+    for (uint32_t r = 0; r < ch_; r++)
     {
-        volatile uint8_t *row = fb + (t->cy + y) * pt + t->cx * bpb;
-        for (uint32_t x = 0; x < cw_; x++)
+        const uint8_t *rd = psf_glyph_row(&t->font, idx, r);
+        uint32_t yo = cy + r;
+        if (yo >= t->fb->height)
+            continue;
+        for (uint32_t xo = 0; xo < cw_; xo++)
         {
-            uint32_t val = 0;
-            for (uint32_t b = 0; b < bpb; b++)
-                val |= (uint32_t)row[x * bpb + b] << (b * 8);
-            val ^= cmask;
-            for (uint32_t b = 0; b < bpb; b++)
-                row[x * bpb + b] = (val >> (b * 8)) & 0xff;
+            if (xo >= cw_)
+                break;
+            uint32_t xp = cx + xo;
+            if (xp >= t->fb->width)
+                continue;
+            if ((rd[xo / 8] >> (7 - (xo % 8))) & 1)
+            {
+                volatile uint32_t *p = (volatile uint32_t *)(fb + yo * pt + xp * bpb);
+                *p = bg;
+            }
         }
     }
 }
@@ -334,7 +389,7 @@ static void cursor_hide(term_t *t)
 {
     if (!t->cursor_drawn)
         return;
-    cursor_flip(t);
+    cursor_draw(t, t->saved_cx, t->saved_cy, false);
     t->cursor_drawn = false;
 }
 
@@ -343,12 +398,14 @@ static void cursor_show(term_t *t)
     if (!t->cursor_on || t->cursor_drawn)
         return;
     ensure_visible(t);
-    cursor_flip(t);
+    t->saved_cx = t->cx;
+    t->saved_cy = t->cy;
+    cursor_draw(t, t->cx, t->cy, true);
     t->cursor_drawn = true;
 }
 
-static uint32_t col(term_t *t) { return cw(t) == 0 ? 0 : t->cx / cw(t); }
-static uint32_t row(term_t *t) { return ch(t) == 0 ? 0 : t->cy / ch(t); }
+static uint32_t col_(term_t *t) { return cw(t) == 0 ? 0 : t->cx / cw(t); }
+static uint32_t row_(term_t *t) { return ch(t) == 0 ? 0 : t->cy / ch(t); }
 
 static void set_cursor(term_t *t, uint32_t r, uint32_t c)
 {
@@ -381,32 +438,32 @@ static void restore_cursor(term_t *t)
 
 static void cursor_up(term_t *t, uint32_t n)
 {
-    uint32_t r = row(t);
-    set_cursor(t, n > r ? 0 : r - n, col(t));
+    uint32_t r = row_(t);
+    set_cursor(t, n > r ? 0 : r - n, col_(t));
 }
 
 static void cursor_down(term_t *t, uint32_t n)
 {
-    uint32_t r = row(t), rs = rows(t);
+    uint32_t r = row_(t), rs = rows(t);
     if (rs == 0)
         return;
     r += n;
-    set_cursor(t, r >= rs ? rs - 1 : r, col(t));
+    set_cursor(t, r >= rs ? rs - 1 : r, col_(t));
 }
 
 static void cursor_forward(term_t *t, uint32_t n)
 {
-    uint32_t c = col(t), cs = cols(t);
+    uint32_t c = col_(t), cs = cols(t);
     if (cs == 0)
         return;
     c += n;
-    set_cursor(t, row(t), c >= cs ? cs - 1 : c);
+    set_cursor(t, row_(t), c >= cs ? cs - 1 : c);
 }
 
 static void cursor_back(term_t *t, uint32_t n)
 {
-    uint32_t c = col(t);
-    set_cursor(t, row(t), n > c ? 0 : c - n);
+    uint32_t c = col_(t);
+    set_cursor(t, row_(t), n > c ? 0 : c - n);
 }
 
 static void newline(term_t *t)
@@ -450,10 +507,14 @@ static void clear_line(term_t *t, int mode)
     if (!t->fb || ch_ == 0 || cw_ == 0)
         return;
 
+    uint32_t r = t->cy / ch_;
+    uint32_t c = t->cx / cw_;
+
     switch (mode)
     {
     case 0:
         clear_rect(t, t->cx, t->cy, t->fb->width - t->cx, ch_, bg_col(t));
+        clear_cells(t, r, c, 1, t->num_cols - c);
         break;
     case 1:
     {
@@ -461,10 +522,12 @@ static void clear_line(term_t *t, int mode)
         if (w > t->fb->width)
             w = t->fb->width;
         clear_rect(t, 0, t->cy, w, ch_, bg_col(t));
+        clear_cells(t, r, 0, 1, c + 1);
         break;
     }
     case 2:
         clear_rect(t, 0, t->cy, t->fb->width, ch_, bg_col(t));
+        clear_cells(t, r, 0, 1, t->num_cols);
         break;
     }
 }
@@ -475,22 +538,32 @@ static void clear_screen(term_t *t, int mode)
     if (!t->fb || ch_ == 0)
         return;
 
+    uint32_t r = t->cy / ch_;
+
     switch (mode)
     {
     case 0:
         clear_line(t, 0);
         if (t->cy + ch_ < t->fb->height)
+        {
+            uint32_t r1 = (t->cy + ch_) / ch_;
             clear_rect(t, 0, t->cy + ch_, t->fb->width,
                        t->fb->height - t->cy - ch_, bg_col(t));
+            clear_cells(t, r1, 0, t->num_rows - r1, t->num_cols);
+        }
         break;
     case 1:
         if (t->cy > 0)
+        {
             clear_rect(t, 0, 0, t->fb->width, t->cy, bg_col(t));
+            clear_cells(t, 0, 0, r, t->num_cols);
+        }
         clear_line(t, 1);
         break;
     case 2:
     case 3:
         clear_rect(t, 0, 0, t->fb->width, t->fb->height, bg_col(t));
+        clear_cells(t, 0, 0, t->num_rows, t->num_cols);
         break;
     }
 }
@@ -500,14 +573,16 @@ static void erase_chars(term_t *t, uint32_t n)
     uint32_t cw_ = cw(t), ch_ = ch(t);
     if (cw_ == 0 || ch_ == 0 || n == 0)
         return;
+    uint32_t r = t->cy / ch_;
+    uint32_t c = t->cx / cw_;
     clear_rect(t, t->cx, t->cy, cw_ * n, ch_, bg_col(t));
+    clear_cells(t, r, c, 1, n);
 }
 
 static void apply_sgr_simple(term_t *t, int p)
 {
     if (p < 0)
         p = 0;
-
     switch (p)
     {
     case 0:
@@ -553,19 +628,16 @@ static void apply_sgr(term_t *t)
         reset_attrs(t);
         return;
     }
-
     for (uint32_t i = 0; i < t->ansi.param_count; i++)
     {
         int p = t->ansi.params[i];
         if (p < 0)
             p = 0;
-
         if ((p == 38 || p == 48) && i + 1 < t->ansi.param_count)
         {
             int mode = t->ansi.params[i + 1];
             if (mode < 0)
                 continue;
-
             if (mode == 5 && i + 2 < t->ansi.param_count)
             {
                 int c = t->ansi.params[i + 2];
@@ -579,7 +651,6 @@ static void apply_sgr(term_t *t)
                 i += 2;
                 continue;
             }
-
             if (mode == 2 && i + 4 < t->ansi.param_count)
             {
                 int r = t->ansi.params[i + 2];
@@ -596,7 +667,6 @@ static void apply_sgr(term_t *t)
                 continue;
             }
         }
-
         apply_sgr_simple(t, p);
     }
 }
@@ -608,7 +678,6 @@ static void private_mode(term_t *t, bool set)
         int p = t->ansi.params[i];
         if (p < 0)
             continue;
-
         switch (p)
         {
         case 7:
@@ -648,7 +717,6 @@ static void dispatch_sequence(term_t *t)
         }
         return;
     }
-
     switch (t->ansi.final)
     {
     case 'm':
@@ -674,25 +742,22 @@ static void dispatch_sequence(term_t *t)
         cursor_up(t, (uint32_t)param(t, 0, 1));
         t->cx = 0;
         break;
-
     case 'G':
     {
         uint32_t c = (uint32_t)param(t, 0, 1);
         if (c > 0)
             c--;
-        set_cursor(t, row(t), c);
+        set_cursor(t, row_(t), c);
         break;
     }
-
     case 'd':
     {
         uint32_t r = (uint32_t)param(t, 0, 1);
         if (r > 0)
             r--;
-        set_cursor(t, r, col(t));
+        set_cursor(t, r, col_(t));
         break;
     }
-
     case 'H':
     case 'f':
     {
@@ -705,7 +770,6 @@ static void dispatch_sequence(term_t *t)
         set_cursor(t, r, c);
         break;
     }
-
     case 'J':
         clear_screen(t, param(t, 0, 0));
         break;
@@ -724,7 +788,6 @@ static void dispatch_sequence(term_t *t)
     case 'u':
         restore_cursor(t);
         break;
-
     default:
         if (t->ansi.private)
         {
@@ -770,10 +833,9 @@ static void put_glyph(term_t *t, char c)
     ensure_visible(t);
 
     uint32_t idx = psf_glyph_index(&t->font, (unsigned char)c);
-
-    uint32_t bpb = fb_bpb(t);
     volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
+    uint32_t bpb = fb_bpb(t);
     uint32_t fg = fg_col(t);
     uint32_t bg = bg_col(t);
 
@@ -788,7 +850,6 @@ static void put_glyph(term_t *t, char c)
         uint32_t y = t->cy + r;
         if (y >= t->fb->height)
             continue;
-
         for (uint32_t xo = 0; xo < gw; xo++)
         {
             if (xo >= cw_)
@@ -796,14 +857,22 @@ static void put_glyph(term_t *t, char c)
             uint32_t x = t->cx + xo;
             if (x >= t->fb->width)
                 continue;
-
             if ((row[xo / 8] >> (7 - (xo % 8))) & 1)
             {
-                volatile uint8_t *p = fb + y * pt + x * bpb;
-                for (uint32_t b = 0; b < bpb; b++)
-                    p[b] = (fg >> (b * 8)) & 0xff;
+                volatile uint32_t *p = (volatile uint32_t *)(fb + y * pt + x * bpb);
+                *p = fg;
             }
         }
+    }
+
+    uint32_t r = t->cy / ch_;
+    uint32_t cc = t->cx / cw_;
+    if (r < t->num_rows && cc < t->num_cols)
+    {
+        cell_t *cell = &t->cells[r * t->num_cols + cc];
+        cell->c = (unsigned char)c;
+        cell->fg = fg;
+        cell->bg = bg;
     }
 
     uint32_t next = t->cx + cw_;
@@ -822,7 +891,7 @@ static void put_glyph(term_t *t, char c)
 
 static void tab(term_t *t)
 {
-    uint32_t c = col(t);
+    uint32_t c = col_(t);
     uint32_t spaces = TAB_WIDTH - (c % TAB_WIDTH);
     if (spaces == 0)
         spaces = TAB_WIDTH;
@@ -842,30 +911,54 @@ static void term_reset(term_t *t)
     t->saved_wrap_pending = false;
     t->cursor_on = true;
     t->cursor_drawn = false;
-
     if (t->fb && t->fb->address)
+    {
         clear_rect(t, 0, 0, t->fb->width, t->fb->height, bg_col(t));
+        clear_cells(t, 0, 0, t->num_rows, t->num_cols);
+    }
 }
 
 void term_init(term_t *t, struct limine_framebuffer *fb,
                const void *psf_data, size_t psf_size)
 {
     t->fb = NULL;
-
     if (!psf_parse(psf_data, psf_size, &t->font))
         return;
-
     t->fb = fb;
+
+    t->num_cols = fb->width / t->font.width;
+    t->num_rows = fb->height / t->font.height;
+
+    size_t n = (size_t)t->num_cols * t->num_rows;
+    t->cells = malloc(n * sizeof(cell_t));
+    if (!t->cells)
+        t->cells = term_alloc(n * sizeof(cell_t));
+
+    {
+        uint32_t fg = ansi_color(t, TERM_DEFAULT_FG);
+        uint32_t bg = ansi_color(t, TERM_DEFAULT_BG);
+        for (uint32_t r = 0; r < t->num_rows; r++)
+            for (uint32_t c = 0; c < t->num_cols; c++)
+            {
+                cell_t *cell = &t->cells[r * t->num_cols + c];
+                cell->c = ' ';
+                cell->fg = fg;
+                cell->bg = bg;
+            }
+    }
+
     t->cx = 0;
     t->cy = 0;
     t->wrap = true;
     t->cursor_on = true;
+    t->cursor_drawn = false;
+    t->saved_cx = 0;
+    t->saved_cy = 0;
+    t->saved_wrap_pending = false;
     ansi_init(&t->ansi);
     reset_attrs(t);
-
     if (t->fb && t->fb->address)
         clear_rect(t, 0, 0, t->fb->width, t->fb->height, ansi_color(t, TERM_DEFAULT_BG));
-
     cursor_show(t);
 }
 
@@ -878,14 +971,12 @@ void term_putc(term_t *t, char c)
     if (cw(t) == 0 || ch(t) == 0)
         return;
 
-    cursor_hide(t);
-
     switch (ansi_feed(&t->ansi, c))
     {
     case ANSI_PENDING:
-        cursor_show(t);
         return;
     case ANSI_READY:
+        cursor_hide(t);
         dispatch_sequence(t);
         cursor_show(t);
         return;
@@ -896,25 +987,35 @@ void term_putc(term_t *t, char c)
     switch (c)
     {
     case '\n':
+        cursor_hide(t);
         newline(t);
-        break;
+        cursor_show(t);
+        return;
     case '\r':
+        cursor_hide(t);
         t->cx = 0;
         t->wrap_pending = false;
-        break;
+        cursor_show(t);
+        return;
     case '\b':
+        cursor_hide(t);
         backspace(t);
-        break;
+        cursor_show(t);
+        return;
     case '\t':
+        cursor_hide(t);
         tab(t);
-        break;
+        cursor_show(t);
+        return;
     default:
-        if ((unsigned char)c >= 0x20 && (unsigned char)c != 0x7f)
-            put_glyph(t, c);
         break;
     }
 
-    cursor_show(t);
+    if ((unsigned char)c >= 0x20 && (unsigned char)c != 0x7f)
+    {
+        put_glyph(t, c);
+        cursor_show(t);
+    }
 }
 
 void term_puts(term_t *t, const char *s)

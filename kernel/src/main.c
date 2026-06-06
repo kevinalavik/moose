@@ -119,7 +119,7 @@ void kmain(void)
     moose_hhdm_off = hhdm_request.response->offset;
     pmm_init();
 
-    /* test pmm*/ {
+    {
         uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
         klog("moose", "Allocate single page @ %p", a);
         pmm_ref(a); /* we now manage it */
@@ -127,12 +127,10 @@ void kmain(void)
         klog("moose", "Wrote \"%d\" to %p", *a, a);
         pmm_unref(a); /* not managed by us when we are done */
         pmm_free(a);
-        /*
-            NOTE: the ref/unref calls are not nesecary, i just do it to test :^)
-        */
+
+        /*   we dont need to ref and unref, i  just do it as a test*/
     }
 
-    /* list limine modules and get the initrd */
     if (module_request.response)
     {
         struct limine_file *initrd = NULL;

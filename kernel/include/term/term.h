@@ -19,25 +19,18 @@ typedef struct term
 {
     struct limine_framebuffer *fb;
     psf_font_t font;
-
     uint32_t cx, cy;
     uint32_t saved_cx, saved_cy;
-
     uint16_t fg, bg;
     uint32_t fg_rgb, bg_rgb;
     bool fg_is_rgb, bg_is_rgb;
     bool bold, reverse;
-
     bool wrap;
     bool wrap_pending;
     bool saved_wrap_pending;
-
     bool cursor_on;
     bool cursor_drawn;
-
     ansi_parser_t ansi;
-
-    /* cell buffer – avoids all reads from WC framebuffer */
     cell_t *cells;
     uint32_t num_cols;
     uint32_t num_rows;
@@ -48,4 +41,4 @@ void term_init(term_t *t, struct limine_framebuffer *fb,
 void term_putc(term_t *t, char c);
 void term_puts(term_t *t, const char *s);
 
-#endif /* TERM_TERM_H */
+#endif /* TERM_TERM__H*/
