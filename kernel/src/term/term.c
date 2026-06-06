@@ -9,8 +9,8 @@
 #define TAB_WIDTH 8
 #define CURSOR_MASK 0x00ffffff
 
-static void term_reset(struct term *t);
-static int param(struct term *t, uint32_t i, int fallback);
+static void term_reset(term_t *t);
+static int param(term_t *t, uint32_t i, int fallback);
 
 static const uint32_t ansi16[16] = {
     RGB(0, 0, 0),
@@ -63,57 +63,57 @@ static uint32_t ansi_color(uint16_t n)
     return ansi16[TERM_DEFAULT_FG];
 }
 
-static volatile uint32_t *pixels(struct term *t)
+static volatile uint32_t *pixels(term_t *t)
 {
     return (volatile uint32_t *)t->fb->address;
 }
 
-static uint32_t pitch(struct term *t)
+static uint32_t pitch(term_t *t)
 {
     return (uint32_t)(t->fb->pitch / sizeof(uint32_t));
 }
 
-static uint32_t cw(struct term *t) { return t->font.width; }
-static uint32_t ch(struct term *t) { return t->font.height; }
+static uint32_t cw(term_t *t) { return t->font.width; }
+static uint32_t ch(term_t *t) { return t->font.height; }
 
-static uint32_t cols(struct term *t)
+static uint32_t cols(term_t *t)
 {
     uint32_t w = cw(t);
     return w == 0 ? 0 : (uint32_t)t->fb->width / w;
 }
 
-static uint32_t rows(struct term *t)
+static uint32_t rows(term_t *t)
 {
     uint32_t h = ch(t);
     return h == 0 ? 0 : (uint32_t)t->fb->height / h;
 }
 
-static uint16_t effective_fg(struct term *t)
+static uint16_t effective_fg(term_t *t)
 {
     return (t->bold && t->fg < 8) ? t->fg + 8 : t->fg;
 }
 
-static uint32_t real_fg(struct term *t)
+static uint32_t real_fg(term_t *t)
 {
     return t->fg_is_rgb ? t->fg_rgb : ansi_color(effective_fg(t));
 }
 
-static uint32_t real_bg(struct term *t)
+static uint32_t real_bg(term_t *t)
 {
     return t->bg_is_rgb ? t->bg_rgb : ansi_color(t->bg);
 }
 
-static uint32_t fg_col(struct term *t)
+static uint32_t fg_col(term_t *t)
 {
     return t->reverse ? real_bg(t) : real_fg(t);
 }
 
-static uint32_t bg_col(struct term *t)
+static uint32_t bg_col(term_t *t)
 {
     return t->reverse ? real_fg(t) : real_bg(t);
 }
 
-static void set_fg(struct term *t, uint16_t n)
+static void set_fg(term_t *t, uint16_t n)
 {
     if (n < 256)
     {
@@ -122,7 +122,7 @@ static void set_fg(struct term *t, uint16_t n)
     }
 }
 
-static void set_bg(struct term *t, uint16_t n)
+static void set_bg(term_t *t, uint16_t n)
 {
     if (n < 256)
     {
@@ -131,7 +131,7 @@ static void set_bg(struct term *t, uint16_t n)
     }
 }
 
-static void set_fg_rgb(struct term *t, uint32_t r, uint32_t g, uint32_t b)
+static void set_fg_rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
     if (r <= 255 && g <= 255 && b <= 255)
     {
@@ -140,7 +140,7 @@ static void set_fg_rgb(struct term *t, uint32_t r, uint32_t g, uint32_t b)
     }
 }
 
-static void set_bg_rgb(struct term *t, uint32_t r, uint32_t g, uint32_t b)
+static void set_bg_rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
     if (r <= 255 && g <= 255 && b <= 255)
     {
@@ -149,7 +149,7 @@ static void set_bg_rgb(struct term *t, uint32_t r, uint32_t g, uint32_t b)
     }
 }
 
-static void reset_attrs(struct term *t)
+static void reset_attrs(term_t *t)
 {
     t->fg = TERM_DEFAULT_FG;
     t->bg = TERM_DEFAULT_BG;
@@ -161,7 +161,7 @@ static void reset_attrs(struct term *t)
     t->reverse = false;
 }
 
-static void clear_rect(struct term *t,
+static void clear_rect(term_t *t,
                        uint32_t x0, uint32_t y0,
                        uint32_t w, uint32_t h, uint32_t color)
 {
@@ -186,7 +186,7 @@ static void clear_rect(struct term *t,
     }
 }
 
-static void scroll_pixels(struct term *t, uint32_t amount)
+static void scroll_pixels(term_t *t, uint32_t amount)
 {
     if (!t->fb || !t->fb->address || amount == 0)
         return;
@@ -211,7 +211,7 @@ static void scroll_pixels(struct term *t, uint32_t amount)
     clear_rect(t, 0, h, t->fb->width, amount, bg_col(t));
 }
 
-static void scroll_lines(struct term *t, uint32_t n)
+static void scroll_lines(term_t *t, uint32_t n)
 {
     uint32_t h = ch(t);
     if (h == 0 || n == 0)
@@ -219,7 +219,7 @@ static void scroll_lines(struct term *t, uint32_t n)
     scroll_pixels(t, h * n);
 }
 
-static void ensure_visible(struct term *t)
+static void ensure_visible(term_t *t)
 {
     uint32_t h = ch(t);
     if (!t->fb || h == 0)
@@ -238,7 +238,7 @@ static void ensure_visible(struct term *t)
     }
 }
 
-static void cursor_flip(struct term *t)
+static void cursor_flip(term_t *t)
 {
     if (!t->fb || !t->fb->address)
         return;
@@ -260,7 +260,7 @@ static void cursor_flip(struct term *t)
     }
 }
 
-static void cursor_hide(struct term *t)
+static void cursor_hide(term_t *t)
 {
     if (!t->cursor_drawn)
         return;
@@ -268,7 +268,7 @@ static void cursor_hide(struct term *t)
     t->cursor_drawn = false;
 }
 
-static void cursor_show(struct term *t)
+static void cursor_show(term_t *t)
 {
     if (!t->cursor_on || t->cursor_drawn)
         return;
@@ -277,10 +277,10 @@ static void cursor_show(struct term *t)
     t->cursor_drawn = true;
 }
 
-static uint32_t col(struct term *t) { return cw(t) == 0 ? 0 : t->cx / cw(t); }
-static uint32_t row(struct term *t) { return ch(t) == 0 ? 0 : t->cy / ch(t); }
+static uint32_t col(term_t *t) { return cw(t) == 0 ? 0 : t->cx / cw(t); }
+static uint32_t row(term_t *t) { return ch(t) == 0 ? 0 : t->cy / ch(t); }
 
-static void set_cursor(struct term *t, uint32_t r, uint32_t c)
+static void set_cursor(term_t *t, uint32_t r, uint32_t c)
 {
     uint32_t rs = rows(t), cs = cols(t);
     if (rs == 0 || cs == 0)
@@ -294,14 +294,14 @@ static void set_cursor(struct term *t, uint32_t r, uint32_t c)
     t->wrap_pending = false;
 }
 
-static void save_cursor(struct term *t)
+static void save_cursor(term_t *t)
 {
     t->saved_cx = t->cx;
     t->saved_cy = t->cy;
     t->saved_wrap_pending = t->wrap_pending;
 }
 
-static void restore_cursor(struct term *t)
+static void restore_cursor(term_t *t)
 {
     t->cx = t->saved_cx;
     t->cy = t->saved_cy;
@@ -309,13 +309,13 @@ static void restore_cursor(struct term *t)
     ensure_visible(t);
 }
 
-static void cursor_up(struct term *t, uint32_t n)
+static void cursor_up(term_t *t, uint32_t n)
 {
     uint32_t r = row(t);
     set_cursor(t, n > r ? 0 : r - n, col(t));
 }
 
-static void cursor_down(struct term *t, uint32_t n)
+static void cursor_down(term_t *t, uint32_t n)
 {
     uint32_t r = row(t), rs = rows(t);
     if (rs == 0)
@@ -324,7 +324,7 @@ static void cursor_down(struct term *t, uint32_t n)
     set_cursor(t, r >= rs ? rs - 1 : r, col(t));
 }
 
-static void cursor_forward(struct term *t, uint32_t n)
+static void cursor_forward(term_t *t, uint32_t n)
 {
     uint32_t c = col(t), cs = cols(t);
     if (cs == 0)
@@ -333,13 +333,13 @@ static void cursor_forward(struct term *t, uint32_t n)
     set_cursor(t, row(t), c >= cs ? cs - 1 : c);
 }
 
-static void cursor_back(struct term *t, uint32_t n)
+static void cursor_back(term_t *t, uint32_t n)
 {
     uint32_t c = col(t);
     set_cursor(t, row(t), n > c ? 0 : c - n);
 }
 
-static void newline(struct term *t)
+static void newline(term_t *t)
 {
     uint32_t h = ch(t);
     if (h == 0)
@@ -350,7 +350,7 @@ static void newline(struct term *t)
     ensure_visible(t);
 }
 
-static void index_(struct term *t)
+static void index_(term_t *t)
 {
     uint32_t h = ch(t);
     if (h == 0)
@@ -360,7 +360,7 @@ static void index_(struct term *t)
     ensure_visible(t);
 }
 
-static void backspace(struct term *t)
+static void backspace(term_t *t)
 {
     uint32_t w = cw(t);
     if (w == 0)
@@ -374,7 +374,7 @@ static void backspace(struct term *t)
         t->cx -= w;
 }
 
-static void clear_line(struct term *t, int mode)
+static void clear_line(term_t *t, int mode)
 {
     uint32_t cw_ = cw(t), ch_ = ch(t);
     if (!t->fb || ch_ == 0 || cw_ == 0)
@@ -399,7 +399,7 @@ static void clear_line(struct term *t, int mode)
     }
 }
 
-static void clear_screen(struct term *t, int mode)
+static void clear_screen(term_t *t, int mode)
 {
     uint32_t ch_ = ch(t);
     if (!t->fb || ch_ == 0)
@@ -425,7 +425,7 @@ static void clear_screen(struct term *t, int mode)
     }
 }
 
-static void erase_chars(struct term *t, uint32_t n)
+static void erase_chars(term_t *t, uint32_t n)
 {
     uint32_t cw_ = cw(t), ch_ = ch(t);
     if (cw_ == 0 || ch_ == 0 || n == 0)
@@ -433,7 +433,7 @@ static void erase_chars(struct term *t, uint32_t n)
     clear_rect(t, t->cx, t->cy, cw_ * n, ch_, bg_col(t));
 }
 
-static void apply_sgr_simple(struct term *t, int p)
+static void apply_sgr_simple(term_t *t, int p)
 {
     if (p < 0)
         p = 0;
@@ -476,7 +476,7 @@ static void apply_sgr_simple(struct term *t, int p)
     }
 }
 
-static void apply_sgr(struct term *t)
+static void apply_sgr(term_t *t)
 {
     if (t->ansi.param_count == 0)
     {
@@ -531,7 +531,7 @@ static void apply_sgr(struct term *t)
     }
 }
 
-static void private_mode(struct term *t, bool set)
+static void private_mode(term_t *t, bool set)
 {
     for (uint32_t i = 0; i < t->ansi.param_count; i++)
     {
@@ -554,7 +554,7 @@ static void private_mode(struct term *t, bool set)
     }
 }
 
-static void dispatch_sequence(struct term *t)
+static void dispatch_sequence(term_t *t)
 {
     if (t->ansi.simple)
     {
@@ -667,14 +667,14 @@ static void dispatch_sequence(struct term *t)
     }
 }
 
-static int param(struct term *t, uint32_t i, int fallback)
+static int param(term_t *t, uint32_t i, int fallback)
 {
     return (i < t->ansi.param_count && t->ansi.params[i] >= 0)
                ? t->ansi.params[i]
                : fallback;
 }
 
-static void put_glyph(struct term *t, char c)
+static void put_glyph(term_t *t, char c)
 {
     uint32_t cw_ = cw(t), ch_ = ch(t);
     if (cw_ == 0 || ch_ == 0)
@@ -745,7 +745,7 @@ static void put_glyph(struct term *t, char c)
     }
 }
 
-static void tab(struct term *t)
+static void tab(term_t *t)
 {
     uint32_t c = col(t);
     uint32_t spaces = TAB_WIDTH - (c % TAB_WIDTH);
@@ -755,7 +755,7 @@ static void tab(struct term *t)
         put_glyph(t, ' ');
 }
 
-static void term_reset(struct term *t)
+static void term_reset(term_t *t)
 {
     reset_attrs(t);
     t->cx = 0;
@@ -772,7 +772,7 @@ static void term_reset(struct term *t)
         clear_rect(t, 0, 0, t->fb->width, t->fb->height, bg_col(t));
 }
 
-void term_init(struct term *t, struct limine_framebuffer *fb,
+void term_init(term_t *t, struct limine_framebuffer *fb,
                const void *psf_data, size_t psf_size)
 {
     t->fb = NULL;
@@ -794,7 +794,7 @@ void term_init(struct term *t, struct limine_framebuffer *fb,
     cursor_show(t);
 }
 
-void term_putc(struct term *t, char c)
+void term_putc(term_t *t, char c)
 {
     if (!t->fb || !t->fb->address)
         return;
@@ -842,7 +842,7 @@ void term_putc(struct term *t, char c)
     cursor_show(t);
 }
 
-void term_puts(struct term *t, const char *s)
+void term_puts(term_t *t, const char *s)
 {
     if (!s)
         return;

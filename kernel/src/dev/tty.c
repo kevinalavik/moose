@@ -3,7 +3,7 @@
 
 struct tty_instance
 {
-    struct tty_ops ops;
+    tty_ops_t ops;
     void *priv;
     char name[TTY_NAME_MAX];
 };

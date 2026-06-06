@@ -25,14 +25,14 @@
 #define COL_TEAL "\x1b[1;36m"
 #define COL_BRIGHT "\x1b[1;37m"
 
-enum ansi_result
+typedef enum
 {
     ANSI_NORMAL,
     ANSI_PENDING,
-    ANSI_READY,
-};
+    ANSI_READY
+} ansi_result_t;
 
-struct ansi_parser
+typedef struct ansi_parser
 {
     int state;
     char final;
@@ -42,9 +42,9 @@ struct ansi_parser
     uint32_t param_count;
     uint32_t value;
     bool have_value;
-};
+} ansi_parser_t;
 
-void ansi_init(struct ansi_parser *p);
-enum ansi_result ansi_feed(struct ansi_parser *p, char c);
+void ansi_init(ansi_parser_t *p);
+ansi_result_t ansi_feed(ansi_parser_t *p, char c);
 
 #endif /* TERM_ANSI_H */

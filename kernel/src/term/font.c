@@ -17,7 +17,7 @@ static uint32_t r32le(const uint8_t *p)
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-bool psf_parse(const void *data, size_t size, struct psf_font *font)
+bool psf_parse(const void *data, size_t size, psf_font_t *font)
 {
     if (!data || !font || size < 4)
         return false;
@@ -102,7 +102,7 @@ bool psf_parse(const void *data, size_t size, struct psf_font *font)
     return false;
 }
 
-uint32_t psf_glyph_index(const struct psf_font *font, uint32_t cp)
+uint32_t psf_glyph_index(const psf_font_t *font, uint32_t cp)
 {
     if (!font->unicode_data || font->unicode_bytes == 0)
     {

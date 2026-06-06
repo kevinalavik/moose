@@ -1,13 +1,8 @@
 #include <term/ansi.h>
 
-enum
-{
-    ANSI_NORM,
-    ANSI_ESC,
-    ANSI_CSI,
-};
+enum { ANSI_NORM, ANSI_ESC, ANSI_CSI };
 
-void ansi_init(struct ansi_parser *p)
+void ansi_init(ansi_parser_t *p)
 {
     p->state = ANSI_NORM;
     p->final = 0;
@@ -18,7 +13,7 @@ void ansi_init(struct ansi_parser *p)
     p->have_value = false;
 }
 
-static void push_param(struct ansi_parser *p)
+static void push_param(ansi_parser_t *p)
 {
     if (p->param_count < ANSI_PARAM_CAP)
     {
@@ -31,7 +26,7 @@ static void push_param(struct ansi_parser *p)
     p->have_value = false;
 }
 
-enum ansi_result ansi_feed(struct ansi_parser *p, char c)
+ansi_result_t ansi_feed(ansi_parser_t *p, char c)
 {
     switch (p->state)
     {

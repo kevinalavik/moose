@@ -14,14 +14,14 @@ typedef enum
     TTY_CTRL_PRESENT,
 } tty_ctrl_cmd_t;
 
-struct tty_ops
+typedef struct tty_ops
 {
     size_t (*write)(void *priv, const void *buf, size_t len);
     size_t (*read)(void *priv, void *buf, size_t len);
     int (*control)(void *priv, tty_ctrl_cmd_t cmd, void *arg);
-};
+} tty_ops_t;
 
-handle_t tty_register(const char *name, const struct tty_ops *ops, void *priv);
+handle_t tty_register(const char *name, const tty_ops_t *ops, void *priv);
 int tty_control(handle_t *h, tty_ctrl_cmd_t cmd, void *arg);
 
 struct limine_framebuffer;

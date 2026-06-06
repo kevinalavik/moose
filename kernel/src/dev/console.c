@@ -3,7 +3,7 @@
 
 struct console
 {
-    struct term term;
+    term_t term;
     bool active;
 };
 
@@ -38,7 +38,7 @@ static int con_control(void *priv, tty_ctrl_cmd_t cmd, void *arg)
     return -1;
 }
 
-static const struct tty_ops con_ops = {
+static const tty_ops_t con_ops = {
     .write = con_write,
     .read = con_read,
     .control = con_control,

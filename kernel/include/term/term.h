@@ -10,10 +10,10 @@
 
 #define RGB(r, g, b) (((r) << 16) | ((g) << 8) | (b))
 
-struct term
+typedef struct term
 {
     struct limine_framebuffer *fb;
-    struct psf_font font;
+    psf_font_t font;
 
     uint32_t cx, cy;
     uint32_t saved_cx, saved_cy;
@@ -30,12 +30,12 @@ struct term
     bool cursor_on;
     bool cursor_drawn;
 
-    struct ansi_parser ansi;
-};
+    ansi_parser_t ansi;
+} term_t;
 
-void term_init(struct term *t, struct limine_framebuffer *fb,
+void term_init(term_t *t, struct limine_framebuffer *fb,
                const void *psf_data, size_t psf_size);
-void term_putc(struct term *t, char c);
-void term_puts(struct term *t, const char *s);
+void term_putc(term_t *t, char c);
+void term_puts(term_t *t, const char *s);
 
 #endif /* TERM_TERM_H */
