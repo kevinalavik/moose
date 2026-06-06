@@ -10,8 +10,9 @@
 #include <dev/uart.h>
 #include <mm/pmm.h>
 #include <lib/math.h>
-
-#define FONT_PATH_PSF "/fonts/tty.psf"
+#include <term/builtin_font.h>
+#include <fs/cpio.h>
+#include <arch/paging.h>
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -35,6 +36,10 @@ __attribute__((used, section(".limine_requests"))) static volatile struct limine
     .id = LIMINE_HHDM_REQUEST_ID,
     .revision = 0};
 
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_executable_address_request kernel_file_request = {
+    .id = LIMINE_EXECUTABLE_FILE_REQUEST_ID,
+    .revision = 0};
+
 __attribute__((used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =
     LIMINE_REQUESTS_END_MARKER;
 
@@ -42,6 +47,8 @@ struct limine_framebuffer *moose_fb = NULL;
 struct limine_memmap_response *moose_memmap = NULL;
 
 uintptr_t moose_hhdm_off = 0;
+uint64_t kernel_virt = 0;
+uint64_t kernel_phys = 0;
 
 handle_t com1;
 handle_t tty0;
@@ -52,27 +59,6 @@ int putc(char ch)
     if (tty0.dev)
         device_write(&tty0, &ch, 1);
     return 1;
-}
-
-static struct limine_file *find_module(const char *path)
-{
-    struct limine_module_response *response = module_request.response;
-
-    if (!response)
-        return NULL;
-
-    for (uint64_t i = 0; i < response->module_count; i++)
-    {
-        struct limine_file *module = response->modules[i];
-
-        if (!module || !module->path)
-            continue;
-
-        if (strcmp(module->path, path) == 0)
-            return module;
-    }
-
-    return NULL;
 }
 
 void kmain(void)
@@ -96,8 +82,7 @@ void kmain(void)
 
     if (!module_request.response)
     {
-        klog("moose", COL_BRED "failed to get kernel modules" COL_RESET);
-        hcf();
+        klog("moose", COL_AMBER "failed to get kernel modules, no present?" COL_RESET);
     }
 
     moose_fb = framebuffer_request.response->framebuffers[0];
@@ -114,15 +99,8 @@ void kmain(void)
         hcf();
     }
 
-    struct limine_file *font_file = find_module(FONT_PATH_PSF);
-    if (font_file)
-    {
-        tty0 = console_init(moose_fb, font_file->address, (size_t)font_file->size);
-        klog("moose", "using %s", device_label(&tty0));
-    }
-
-    if (!tty0.dev)
-        klog("moose", COL_AMBER "no font module found. add tty.psf to limine.conf" COL_RESET);
+    tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
+    klog("moose", "using %s", device_label(&tty0));
 
     gdt_init();
     idt_init();
@@ -154,5 +132,35 @@ void kmain(void)
             NOTE: the ref/unref calls are not nesecary, i just do it to test :^)
         */
     }
+
+    /* list limine modules and get the initrd */
+    if (module_request.response)
+    {
+        struct limine_file *initrd = NULL;
+        klog("moose", "module list:");
+        for (uint64_t i = 0; i < module_request.response->module_count; i++)
+        {
+            struct limine_file *mod = module_request.response->modules[i];
+            klog("moose", "  [%d] %s: %d bytes", i, mod->path, mod->size);
+            if (strcmp(mod->path, "/boot/initrd.cpio") == 0)
+                initrd = mod;
+        }
+
+        if (initrd)
+        {
+            klog("moose", "found initrd @ %s", initrd->path);
+            cpio_parse(initrd->address, initrd->size);
+        }
+    }
+
+    if (!kernel_file_request.response)
+    {
+        klog("moose", COL_BRED "failed to get kernel info" COL_RESET);
+        hcf();
+    }
+
+    kernel_virt = kernel_file_request.response->virtual_base;
+    kernel_phys = kernel_file_request.response->physical_base;
+    paging_init();
     hlt();
 }

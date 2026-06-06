@@ -12,4 +12,7 @@ extern uintptr_t moose_hhdm_off;
 #define VIRT_TO_PHYS(v) ((uintptr_t)(v) - moose_hhdm_off)
 #define IS_HHDM(v) ((uintptr_t)(v) >= moose_hhdm_off)
 
+extern uint64_t kernel_virt;
+extern uint64_t kernel_phys;
+
 #endif /* SYS_MOOSE_H */

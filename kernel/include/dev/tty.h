@@ -28,4 +28,4 @@ struct limine_framebuffer;
 handle_t console_init(struct limine_framebuffer *fb,
                       const void *psf_data, size_t psf_size);
 
-#endif
+#endif /* DEV_TTY_H*/

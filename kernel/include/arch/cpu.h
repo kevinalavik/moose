@@ -31,4 +31,16 @@ static inline void sti()
     __asm__ volatile("sti");
 }
 
+static inline uint64_t read_cr3(void)
+{
+    uint64_t cr3;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    return cr3;
+}
+
+static inline void invlpg(uint64_t addr)
+{
+    asm volatile("invlpg (%0)" ::"r"(addr) : "memory");
+}
+
 #endif /* ARCH_CPU_H */

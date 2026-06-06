@@ -15,7 +15,7 @@ extern void *isr_stub_table[];
 
 __attribute__((noreturn)) void exception_handler(int_frame_t *frame)
 {
-    klog("panic", COL_BRED "exception vector=%lu error=%#lx rip=%#lx" COL_RESET, frame->vector, frame->error_code, frame->rip);
+    klog("panic", COL_BRED "exception vector=%lu error=%02x rip=0x%.16llx" COL_RESET, frame->vector, frame->error_code, frame->rip);
     hcf();
 }
 

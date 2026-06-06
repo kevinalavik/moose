@@ -4,6 +4,9 @@
 override IMAGE_NAME := moose
 override KERNEL_NAME := moose-kernel
 
+INITRD := initrd
+INITRD_IMG := initrd.cpio
+
 MAKEFLAGS += --no-print-directory
 
 V ?= 0
@@ -83,11 +86,16 @@ kernel/.deps-obtained:
 	@printf "  %-7s %s\n" DEPS "kernel"
 	$(Q)./kernel/get-deps
 
+$(INITRD_IMG): $(INITRD)
+	@printf "  %-7s %s\n" CPIO "$(INITRD_IMG)"
+	$(Q)rm -f $(INITRD_IMG)
+	$(Q)cd $(INITRD) && find . -print0 | cpio --null -ov --format=newc > ../$(INITRD_IMG)
+
 .PHONY: kernel
 kernel: kernel/.deps-obtained
 	$(Q)$(MAKE) -C kernel
 
-$(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel rootfs
+$(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel $(INITRD_IMG)
 	@printf "  %-7s %s\n" GEN "iso_root"
 	$(Q)rm -rf iso_root
 	$(Q)mkdir -p iso_root/boot
@@ -97,9 +105,9 @@ $(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel rootfs
 	@printf "  %-7s %s\n" CP "kernel/bin/$(KERNEL_NAME)"
 	$(Q)cp kernel/bin/$(KERNEL_NAME) iso_root/boot/
 
-	@printf "  %-7s %s\n" CP "rootfs/"
-	$(Q)cp -r rootfs/* iso_root/
-	
+	@printf "  %-7s %s\n" CP "initrd"
+	$(Q)cp $(INITRD_IMG) iso_root/boot/
+
 	@printf "  %-7s %s\n" CP "limine files"
 	$(Q)cp limine.conf \
 		limine-binary/limine-bios.sys \
@@ -126,8 +134,7 @@ $(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel rootfs
 	@printf "  %-7s %s\n" CLEAN "iso_root"
 	$(Q)rm -rf iso_root
 
-# todo: make hdd copy over rootfs (idk mtools that good)
-$(IMAGE_NAME).hdd: limine-binary/limine limine.conf kernel 
+$(IMAGE_NAME).hdd: limine-binary/limine limine.conf kernel $(INITRD_IMG)
 	@printf "  %-7s %s\n" HDD "$(IMAGE_NAME).hdd"
 	$(Q)rm -f $(IMAGE_NAME).hdd
 	$(Q)dd if=/dev/zero bs=1M count=0 seek=64 of=$(IMAGE_NAME).hdd status=none
@@ -148,6 +155,9 @@ $(IMAGE_NAME).hdd: limine-binary/limine limine.conf kernel
 	@printf "  %-7s %s\n" MCOPY "kernel/bin/$(KERNEL_NAME)"
 	$(Q)mcopy -i $(IMAGE_NAME).hdd@@1M kernel/bin/$(KERNEL_NAME) ::/boot
 
+	@printf "  %-7s %s\n" MCOPY "initrd"
+	$(Q)mcopy -i $(IMAGE_NAME).hdd@@1M $(INITRD_IMG) ::/boot
+
 	@printf "  %-7s %s\n" MCOPY "limine files"
 	$(Q)mcopy -i $(IMAGE_NAME).hdd@@1M limine.conf limine-binary/limine-bios.sys ::/boot/limine
 
@@ -160,7 +170,7 @@ clean:
 	$(Q)$(MAKE) -C kernel clean
 	@printf "  %-7s %s\n" CLEAN "root"
 	$(Q)rm -rf iso_root $(IMAGE_NAME).iso $(IMAGE_NAME).hdd
-	$(Q)rm -f .xorriso.log .limine-build.log .limine-iso.log .limine-hdd.log
+	$(Q)rm -f .xorriso.log .limine-build.log .limine-iso.log .limine-hdd.log $(INITRD_IMG)
 
 .PHONY: distclean
 distclean:
