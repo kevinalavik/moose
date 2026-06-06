@@ -84,79 +84,75 @@ void kmain(void)
     if (com1.dev == NULL)
     {
         /* this is sort-of pointless rn since there will be no output if uart fails  since it inits before fb*/
-        klog("early", COL_AMBER "failed to open COM1 device handle" COL_RESET);
+        klog("moose", COL_AMBER "failed to open COM1 device handle" COL_RESET);
     }
 
     if (!framebuffer_request.response ||
         framebuffer_request.response->framebuffer_count < 1)
     {
-        klog("early", COL_BRED "failed to get framebuffer" COL_RESET);
+        klog("moose", COL_BRED "failed to get framebuffer" COL_RESET);
         hcf(); /* this is a graphical OS so if no framebuffer available then fuck off*/
     }
 
     if (!module_request.response)
     {
-        klog("early", COL_BRED "failed to get kernel modules" COL_RESET);
+        klog("moose", COL_BRED "failed to get kernel modules" COL_RESET);
         hcf();
     }
 
     moose_fb = framebuffer_request.response->framebuffers[0];
     if (!moose_fb || !moose_fb->address)
     {
-        klog("early", COL_BRED "invalid framebuffer" COL_RESET);
+        klog("moose", COL_BRED "invalid framebuffer" COL_RESET);
         hcf();
     }
 
     /* todo: make term support any bpp aswell as color shift */
     if (moose_fb->bpp != 32)
     {
-        klog("early", COL_BRED "not a 32bpp framebuffer" COL_RESET);
+        klog("moose", COL_BRED "not a 32bpp framebuffer" COL_RESET);
         hcf();
     }
 
     struct limine_file *font_file = find_module(FONT_PATH_PSF);
     if (font_file)
+    {
         tty0 = console_init(moose_fb, font_file->address, (size_t)font_file->size);
+        klog("moose", "using %s", device_label(&tty0));
+    }
 
     if (!tty0.dev)
-        klog("early", COL_AMBER "no font module found. add tty.psf to limine.conf" COL_RESET);
-
-    klog("early", "moose kernel v0.1.0");
+        klog("moose", COL_AMBER "no font module found. add tty.psf to limine.conf" COL_RESET);
 
     gdt_init();
-    klog("early", "init GDT with kcode sel=0x%x and kdata sel=0x%x", GDT_KCODE_SEL, GDT_KDATA_SEL);
-
     idt_init();
-    klog("early", "init IDT");
 
     if (!memmap_request.response)
     {
-        klog("early", COL_BRED "failed to get memory map" COL_RESET);
+        klog("moose", COL_BRED "failed to get memory map" COL_RESET);
         hcf();
     }
     moose_memmap = memmap_request.response;
 
     if (!hhdm_request.response)
     {
-        klog("early", COL_BRED "failed to get hhdm offset" COL_RESET);
+        klog("moose", COL_BRED "failed to get hhdm offset" COL_RESET);
         hcf();
     }
     moose_hhdm_off = hhdm_request.response->offset;
     pmm_init();
-    klog("early", "init PMM");
 
     /* test pmm*/ {
         uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
-        klog("early", "Allocate single page @ %p", a);
+        klog("moose", "Allocate single page @ %p", a);
         pmm_ref(a); /* we now manage it */
         *a = 42;
-        klog("early", "Wrote \"%d\" to %p", *a, a);
+        klog("moose", "Wrote \"%d\" to %p", *a, a);
         pmm_unref(a); /* not managed by us when we are done */
         pmm_free(a);
         /*
             NOTE: the ref/unref calls are not nesecary, i just do it to test :^)
         */
     }
-    klog("early", "using %s", device_label(&tty0));
     hlt();
 }

@@ -26,4 +26,9 @@ static inline void outb(uint16_t port, uint8_t value)
     __asm__ volatile("outb %0, %1" ::"a"(value), "Nd"(port));
 }
 
+static inline void sti()
+{
+    __asm__ volatile("sti");
+}
+
 #endif /* ARCH_CPU_H */

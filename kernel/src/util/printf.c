@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-extern void putc(char); /* defined in term.h*/
+extern void putc(char);
 
 typedef enum
 {
@@ -17,379 +17,410 @@ typedef enum
     PRINT_LEN_J,
 } print_len_t;
 
-int _print_char(char ch)
+typedef struct
 {
-    putc(ch);
+    int width;
+    int precision;
+    bool left;
+    bool zero;
+    bool precision_set;
+} print_fmt_t;
+
+typedef struct
+{
+    char *buf;
+    size_t size;
+    size_t idx;
+} snbuf_t;
+
+typedef struct fmt_ctx fmt_ctx_t;
+typedef int (*fmt_handler)(fmt_ctx_t *);
+
+struct fmt_ctx
+{
+    const char *fmt;
+    va_list args;
+    bool is_sn;
+    snbuf_t *sn;
+    print_fmt_t f;
+    print_len_t len;
+    int count;
+};
+
+static void sn_putc(char c, snbuf_t *b)
+{
+    if (!b || !b->buf || b->idx + 1 >= b->size)
+        return;
+    b->buf[b->idx++] = c;
+}
+
+static inline void outc(char c, bool is_sn, snbuf_t *b)
+{
+    if (is_sn)
+        sn_putc(c, b);
+    else
+        putc(c);
+}
+
+static int str_len(const char *s)
+{
+    int i = 0;
+    while (s && s[i])
+        i++;
+    return i;
+}
+
+static void pad(int n, char c, bool is_sn, snbuf_t *b)
+{
+    for (int i = 0; i < n; i++)
+        outc(c, is_sn, b);
+}
+
+static int print_unsigned(uintmax_t v, int base, bool upper, print_fmt_t *f, bool is_sn, snbuf_t *b)
+{
+    char buf[65];
+    int i = 0;
+
+    if (v == 0)
+        buf[i++] = '0';
+    else
+    {
+        while (v)
+        {
+            uintmax_t r = v % base;
+            buf[i++] = (r < 10)
+                           ? ('0' + r)
+                           : ((upper ? 'A' : 'a') + (r - 10));
+            v /= base;
+        }
+    }
+
+    int digits = i;
+
+    int prec = 0;
+    if (f && f->precision_set)
+    {
+        prec = (f->precision > digits) ? (f->precision - digits) : 0;
+    }
+
+    int total = digits + prec;
+
+    int padw = (f && f->width > total) ? (f->width - total) : 0;
+
+    char padc = ' ';
+    if (f && f->zero && !f->left && !f->precision_set)
+        padc = '0';
+
+    if (f && !f->left)
+        pad(padw, padc, is_sn, b);
+
+    pad(prec, '0', is_sn, b);
+
+    while (i--)
+        outc(buf[i], is_sn, b);
+
+    if (f && f->left)
+        pad(padw, ' ', is_sn, b);
+
+    return digits + prec + padw;
+}
+
+static int print_signed(intmax_t v, print_fmt_t *f, bool is_sn, snbuf_t *b)
+{
+    int neg = (v < 0);
+    uintmax_t u = neg ? (uintmax_t)(-v) : (uintmax_t)v;
+
+    char buf[65];
+    int i = 0;
+
+    if (u == 0)
+        buf[i++] = '0';
+    else
+    {
+        while (u)
+        {
+            buf[i++] = '0' + (u % 10);
+            u /= 10;
+        }
+    }
+
+    int digits = i;
+    int prec = 0;
+    if (f && f->precision_set)
+    {
+        prec = (f->precision > digits) ? (f->precision - digits) : 0;
+        f->zero = false;
+    }
+
+    int total = digits + prec + neg;
+    int padw = (f && f->width > total) ? (f->width - total) : 0;
+    if (f && !f->left)
+        pad(padw, ' ', is_sn, b);
+
+    if (neg)
+        outc('-', is_sn, b);
+
+    pad(prec, '0', is_sn, b);
+    while (i--)
+        outc(buf[i], is_sn, b);
+
+    if (f && f->left)
+        pad(padw, ' ', is_sn, b);
+
+    return digits + prec + padw + neg;
+}
+
+static int handle_pct(fmt_ctx_t *c)
+{
+    outc('%', c->is_sn, c->sn);
+    c->count++;
     return 1;
 }
 
-int _print_str(char *s)
+static int handle_char(fmt_ctx_t *c)
 {
-    int c = 0;
+    char ch = va_arg(c->args, int);
+    outc(ch, c->is_sn, c->sn);
+    c->count++;
+    return 1;
+}
 
-    if (s == NULL)
+static int handle_str(fmt_ctx_t *c)
+{
+    char *s = va_arg(c->args, char *);
+    if (!s)
         s = "(null)";
 
-    while (*s)
-    {
-        putc(*s++);
-        c++;
-    }
+    int l = str_len(s);
+    if (c->f.precision_set && c->f.precision < l)
+        l = c->f.precision;
 
-    return c;
+    int padw = (c->f.width > l) ? (c->f.width - l) : 0;
+    if (!c->f.left)
+        pad(padw, ' ', c->is_sn, c->sn);
+
+    for (int i = 0; i < l; i++)
+        outc(s[i], c->is_sn, c->sn);
+
+    if (c->f.left)
+        pad(padw, ' ', c->is_sn, c->sn);
+
+    c->count += l + padw;
+    return 1;
 }
 
-int _print_unsigned_number(uintmax_t value, int base, bool alternate)
+static int handle_int(fmt_ctx_t *c)
 {
-    char buf[sizeof(uintmax_t) * 8];
-    int i = 0;
-    int count = 0;
-
-    if (base < 2 || base > 16)
-        return 0;
-
-    if (alternate && base == 16 && value != 0)
-    {
-        count += _print_str("0x");
-    }
-
-    if (value == 0)
-    {
-        putc('0');
-        return count + 1;
-    }
-
-    while (value != 0)
-    {
-        uintmax_t rem = value % base;
-
-        if (rem < 10)
-            buf[i] = rem + '0';
-        else
-            buf[i] = (rem - 10) + 'a';
-
-        i++;
-        value = value / base;
-    }
-
-    while (i > 0)
-    {
-        i--;
-        putc(buf[i]);
-        count++;
-    }
-
-    return count;
+    intmax_t v = va_arg(c->args, int);
+    c->count += print_signed(v, &c->f, c->is_sn, c->sn);
+    return 1;
 }
 
-int _print_signed_number(intmax_t value, int base)
+static int handle_uint(fmt_ctx_t *c)
 {
-    int count = 0;
-    uintmax_t n;
-
-    if (base < 2 || base > 16)
-        return 0;
-
-    if (value < 0)
-    {
-        putc('-');
-        count++;
-        n = -(value + 1) + 1;
-    }
-    else
-    {
-        n = value;
-    }
-
-    return count + _print_unsigned_number(n, base, false);
+    uintmax_t v = va_arg(c->args, uintmax_t);
+    c->count += print_unsigned(v, 10, false, &c->f, c->is_sn, c->sn);
+    return 1;
 }
 
-int _print_addr(uintptr_t value, unsigned base)
+static int handle_hex(fmt_ctx_t *c)
 {
-    char buf[sizeof(uintptr_t) * 8];
-    unsigned i = 0;
-    int count = 0;
-    unsigned min_width = sizeof(uintptr_t) * 2;
+    uintmax_t v = va_arg(c->args, uintmax_t);
+    c->count += print_unsigned(v, 16, false, &c->f, c->is_sn, c->sn);
+    return 1;
+}
 
-    if (base < 2 || base > 16)
-        return 0;
+static int handle_HEX(fmt_ctx_t *c)
+{
+    uintmax_t v = va_arg(c->args, uintmax_t);
+    c->count += print_unsigned(v, 16, true, &c->f, c->is_sn, c->sn);
+    return 1;
+}
 
-    if (value == 0)
+static int handle_ptr(fmt_ctx_t *c)
+{
+    uintptr_t p = (uintptr_t)va_arg(c->args, void *);
+    outc('0', c->is_sn, c->sn);
+    outc('x', c->is_sn, c->sn);
+    c->count += 2;
+    print_fmt_t tmp = c->f;
+    tmp.width = (tmp.width > 2) ? tmp.width - 2 : 0;
+    c->count += print_unsigned(p, 16, false, &tmp, c->is_sn, c->sn);
+    return 1;
+}
+
+static int handle_default(fmt_ctx_t *c)
+{
+    outc('%', c->is_sn, c->sn);
+    outc(*c->fmt, c->is_sn, c->sn);
+    c->count += 2;
+    return 1;
+}
+
+static fmt_handler table[256];
+
+static void init_table(void)
+{
+    for (int i = 0; i < 256; i++)
+        table[i] = handle_default;
+
+    table['%'] = handle_pct;
+    table['c'] = handle_char;
+    table['s'] = handle_str;
+    table['d'] = handle_int;
+    table['i'] = handle_int;
+    table['u'] = handle_uint;
+    table['x'] = handle_hex;
+    table['X'] = handle_HEX;
+    table['p'] = handle_ptr;
+}
+
+static void parse_flags(fmt_ctx_t *c)
+{
+    c->f = (print_fmt_t){0, 0, false, false, false};
+
+    while (*c->fmt)
     {
-        buf[i++] = '0';
-    }
-    else
-    {
-        while (value != 0)
+        if (*c->fmt == '-')
         {
-            uintptr_t rem = value % base;
-            if (rem < 10)
-                buf[i++] = '0' + rem;
-            else
-                buf[i++] = 'a' + (rem - 10);
-            value /= base;
+            c->f.left = true;
+            c->fmt++;
+            continue;
+        }
+        if (*c->fmt == '0')
+        {
+            c->f.zero = true;
+            c->fmt++;
+            continue;
+        }
+        break;
+    }
+
+    while (*c->fmt >= '0' && *c->fmt <= '9')
+    {
+        c->f.width = c->f.width * 10 + (*c->fmt - '0');
+        c->fmt++;
+    }
+
+    if (*c->fmt == '.')
+    {
+        c->fmt++;
+        c->f.precision_set = true;
+
+        while (*c->fmt >= '0' && *c->fmt <= '9')
+        {
+            c->f.precision = c->f.precision * 10 + (*c->fmt - '0');
+            c->fmt++;
         }
     }
-
-    while (i < min_width)
-    {
-        putc('0');
-        count++;
-        min_width--;
-    }
-
-    while (i > 0)
-    {
-        putc(buf[--i]);
-        count++;
-    }
-
-    return count;
 }
 
-int PRINTF_PREFIX(vprintf)(const char *fmt, va_list vlist)
+static void parse_len(fmt_ctx_t *c)
 {
-    int c = 0;
-
-    while (*fmt)
+    if (*c->fmt == 'h')
     {
-        if (*fmt != '%')
+        c->fmt++;
+        c->len = (*c->fmt == 'h') ? (++c->fmt, PRINT_LEN_HH) : PRINT_LEN_H;
+    }
+    else if (*c->fmt == 'l')
+    {
+        c->fmt++;
+        c->len = (*c->fmt == 'l') ? (++c->fmt, PRINT_LEN_LL) : PRINT_LEN_L;
+    }
+    else if (*c->fmt == 'z')
+    {
+        c->len = PRINT_LEN_Z;
+        c->fmt++;
+    }
+    else if (*c->fmt == 'j')
+    {
+        c->len = PRINT_LEN_J;
+        c->fmt++;
+    }
+}
+
+static int vcore(fmt_ctx_t *c)
+{
+    if (!table['%'])
+        init_table();
+
+    while (*c->fmt)
+    {
+        if (*c->fmt != '%')
         {
-            putc(*fmt++);
-            c++;
+            outc(*c->fmt++, c->is_sn, c->sn);
+            c->count++;
             continue;
         }
 
-        fmt++; /* on % we skip it so we can parse example: %s */
-        if (*fmt == '\0')
-            break; /* if there is a single % on the end off the string we skip it */
-
-        bool alternate = false;
-        print_len_t len = PRINT_LEN_NONE;
-
-        while (*fmt == '#')
-        {
-            alternate = true;
-            fmt++;
-        }
-
-        if (*fmt == 'h')
-        {
-            fmt++;
-            if (*fmt == 'h')
-            {
-                len = PRINT_LEN_HH;
-                fmt++;
-            }
-            else
-            {
-                len = PRINT_LEN_H;
-            }
-        }
-        else if (*fmt == 'l')
-        {
-            fmt++;
-            if (*fmt == 'l')
-            {
-                len = PRINT_LEN_LL;
-                fmt++;
-            }
-            else
-            {
-                len = PRINT_LEN_L;
-            }
-        }
-        else if (*fmt == 'z')
-        {
-            len = PRINT_LEN_Z;
-            fmt++;
-        }
-        else if (*fmt == 'j')
-        {
-            len = PRINT_LEN_J;
-            fmt++;
-        }
-
-        switch (*fmt)
-        {
-        case '%': /* %% -> % */
-            putc('%');
-            c++;
+        c->fmt++;
+        if (!*c->fmt)
             break;
 
-        case 'c': /* %c -> <char> */
-        {
-            char ch = va_arg(vlist, int);
-            putc(ch);
-            c++;
-            break;
-        }
+        parse_flags(c);
+        parse_len(c);
 
-        case 's': /* %s -> <string>*/
-        {
-            char *s = va_arg(vlist, char *);
-            c += _print_str(s);
-            break;
-        }
+        fmt_handler h = table[(unsigned char)*c->fmt];
+        h(c);
 
-        case 'd': /* %d -> <int> */
-        case 'i': /* %i -> <int> */
-        {
-            intmax_t d;
-
-            switch (len)
-            {
-            case PRINT_LEN_HH:
-                d = (signed char)va_arg(vlist, int);
-                break;
-            case PRINT_LEN_H:
-                d = (short)va_arg(vlist, int);
-                break;
-            case PRINT_LEN_L:
-                d = va_arg(vlist, long);
-                break;
-            case PRINT_LEN_LL:
-                d = va_arg(vlist, long long);
-                break;
-            case PRINT_LEN_Z:
-                d = va_arg(vlist, long);
-                break;
-            case PRINT_LEN_J:
-                d = va_arg(vlist, intmax_t);
-                break;
-            default:
-                d = va_arg(vlist, int);
-                break;
-            }
-
-            c += _print_signed_number(d, 10);
-            break;
-        }
-
-        case 'u': /* %u -> <uint> */
-        {
-            uintmax_t u;
-
-            switch (len)
-            {
-            case PRINT_LEN_HH:
-                u = (unsigned char)va_arg(vlist, unsigned int);
-                break;
-            case PRINT_LEN_H:
-                u = (unsigned short)va_arg(vlist, unsigned int);
-                break;
-            case PRINT_LEN_L:
-                u = va_arg(vlist, unsigned long);
-                break;
-            case PRINT_LEN_LL:
-                u = va_arg(vlist, unsigned long long);
-                break;
-            case PRINT_LEN_Z:
-                u = va_arg(vlist, size_t);
-                break;
-            case PRINT_LEN_J:
-                u = va_arg(vlist, uintmax_t);
-                break;
-            default:
-                u = va_arg(vlist, unsigned int);
-                break;
-            }
-
-            c += _print_unsigned_number(u, 10, false);
-            break;
-        }
-
-        case 'x': /* %x -> <hex> */
-        {
-            uintmax_t x;
-
-            switch (len)
-            {
-            case PRINT_LEN_HH:
-                x = (unsigned char)va_arg(vlist, unsigned int);
-                break;
-            case PRINT_LEN_H:
-                x = (unsigned short)va_arg(vlist, unsigned int);
-                break;
-            case PRINT_LEN_L:
-                x = va_arg(vlist, unsigned long);
-                break;
-            case PRINT_LEN_LL:
-                x = va_arg(vlist, unsigned long long);
-                break;
-            case PRINT_LEN_Z:
-                x = va_arg(vlist, size_t);
-                break;
-            case PRINT_LEN_J:
-                x = va_arg(vlist, uintmax_t);
-                break;
-            default:
-                x = va_arg(vlist, unsigned int);
-                break;
-            }
-
-            c += _print_unsigned_number(x, 16, alternate);
-            break;
-        }
-
-        case 'p': /* %p -> 0x<addr>*/ /* address is padded in _print_addr */
-        {
-            void *p = va_arg(vlist, void *);
-            uintptr_t addr = (uintptr_t)p;
-
-            c += _print_str("0x");
-            c += _print_addr(addr, 16);
-            break;
-        }
-
-        default: /* %<unknown> -> %<unknown>*/
-            c += _print_char('%');
-
-            if (alternate)
-                c += _print_char('#');
-
-            switch (len)
-            {
-            case PRINT_LEN_HH:
-                c += _print_char('h');
-                c += _print_char('h');
-                break;
-            case PRINT_LEN_H:
-                c += _print_char('h');
-                break;
-            case PRINT_LEN_L:
-                c += _print_char('l');
-                break;
-            case PRINT_LEN_LL:
-                c += _print_char('l');
-                c += _print_char('l');
-                break;
-            case PRINT_LEN_Z:
-                c += _print_char('z');
-                break;
-            case PRINT_LEN_J:
-                c += _print_char('j');
-                break;
-            default:
-                break;
-            }
-
-            c += _print_char(*fmt);
-            break;
-        }
-
-        fmt++;
+        c->fmt++;
     }
 
-    return c;
+    return c->count;
+}
+
+int PRINTF_PREFIX(vprintf)(const char *fmt, va_list args)
+{
+    fmt_ctx_t c;
+    c.fmt = fmt;
+    c.is_sn = false;
+    c.sn = NULL;
+    c.count = 0;
+    c.len = PRINT_LEN_NONE;
+    c.f = (print_fmt_t){0};
+    va_copy(c.args, args);
+    int r = vcore(&c);
+    va_end(c.args);
+    return r;
 }
 
 int PRINTF_PREFIX(printf)(const char *fmt, ...)
 {
-    va_list arg;
-    int ret = 0;
-    va_start(arg, fmt);
-    ret = PRINTF_PREFIX(vprintf)(fmt, arg);
-    va_end(arg);
-    return ret;
+    va_list args;
+    va_start(args, fmt);
+    int r = PRINTF_PREFIX(vprintf)(fmt, args);
+    va_end(args);
+    return r;
+}
+
+int PRINTF_PREFIX(vsnprintf)(char *buf, size_t size, const char *fmt, va_list args)
+{
+    snbuf_t sn = {buf, size, 0};
+    fmt_ctx_t c;
+    c.fmt = fmt;
+    c.is_sn = true;
+    c.sn = &sn;
+    c.count = 0;
+    c.len = PRINT_LEN_NONE;
+    c.f = (print_fmt_t){0};
+    va_copy(c.args, args);
+    int r = vcore(&c);
+    va_end(c.args);
+    if (size)
+    {
+        if (sn.idx < size)
+            buf[sn.idx] = '\0';
+        else
+            buf[size - 1] = '\0';
+    }
+    return r;
+}
+
+int PRINTF_PREFIX(snprintf)(char *buf, size_t size, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int r = PRINTF_PREFIX(vsnprintf)(buf, size, fmt, args);
+    va_end(args);
+    return r;
 }

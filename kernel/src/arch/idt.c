@@ -57,7 +57,7 @@ void idt_init()
     }
 
     __asm__ volatile("lidt %0" : : "m"(idtr));
-    __asm__ volatile("sti");
+    sti();
 
-    klog("idt", COL_STEEL "loaded idt @ %p" COL_RESET, &idtr);
+    klog("idt", "loaded idt @ %p", &idtr);
 }

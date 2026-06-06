@@ -90,13 +90,27 @@ void pmm_init(void)
 
     if (map_phys == (uint64_t)-1)
     {
-        klog("pmm", COL_BRED "could not place page database (need %u MiB)" COL_RESET, (map_pages * PAGE_SIZE) / 1024 / 1024);
+        klog("pmm", COL_BRED "could not place page database (need %s)" COL_RESET, size_to_str(map_pages * PAGE_SIZE));
         return;
     }
 
-    mem_map = (page_t *)PHYS_TO_VIRT(map_phys);
+    uint64_t map_end_phys = map_phys + map_pages * PAGE_SIZE;
 
-    klog("pmm", COL_CYAN "page database @ %p (%u pages, %u MiB)" COL_RESET, mem_map, map_pages, (map_pages * PAGE_SIZE) / 1024 / 1024);
+    mem_map = (page_t *)PHYS_TO_VIRT(map_phys);
+    klog("pmm", "page database @ %p (%s)", mem_map, size_to_str(map_pages * PAGE_SIZE));
+
+    klog("pmm", "memory map (usable regions):");
+    for (uint64_t i = 0; i < moose_memmap->entry_count; i++)
+    {
+        struct limine_memmap_entry *e = moose_memmap->entries[i];
+        if (e->type != LIMINE_MEMMAP_USABLE)
+            continue;
+        uint64_t start = ALIGN_UP(e->base, PAGE_SIZE);
+        uint64_t end = ALIGN_DOWN(e->base + e->length, PAGE_SIZE);
+        if (end <= start)
+            continue;
+        klog("pmm", "  0x%016llx - 0x%016llx [%s]", start, end - 1, size_to_str(end - start));
+    }
 
     for (uint64_t i = 0; i < total_pages; i++)
     {
@@ -104,9 +118,6 @@ void pmm_init(void)
         mem_map[i].flags = PAGE_RESERVED;
         mem_map[i].refcount = 0;
     }
-    reserved_pages = total_pages;
-
-    uint64_t map_end_phys = map_phys + map_pages * PAGE_SIZE;
 
     for (uint64_t i = 0; i < moose_memmap->entry_count; i++)
     {
@@ -125,20 +136,28 @@ void pmm_init(void)
             if (pfn >= total_pages)
                 continue;
 
-            if (phys >= map_phys && phys < map_end_phys)
-                continue;
-
             page_t *p = &mem_map[pfn];
-            p->flags = PAGE_FREE;
-            p->refcount = 0;
-            p->next = NULL;
-            _append_page(p);
-            free_pages++;
-            reserved_pages--;
+
+            if (phys >= map_phys && phys < map_end_phys)
+            {
+                p->flags = PAGE_RESERVED;
+                p->refcount = 1;
+                reserved_pages++;
+            }
+            else
+            {
+                p->flags = PAGE_FREE;
+                p->refcount = 0;
+                p->next = NULL;
+                _append_page(p);
+                free_pages++;
+            }
         }
     }
 
-    klog("pmm", COL_CYAN "%u MiB free, %u MiB reserved" COL_RESET, (free_pages * PAGE_SIZE) / 1024 / 1024, (reserved_pages * PAGE_SIZE) / 1024 / 1024);
+    klog("pmm", "%s free, %s reserved",
+         size_to_str(free_pages * PAGE_SIZE),
+         size_to_str(reserved_pages * PAGE_SIZE));
 }
 
 void *pmm_alloc(void)
@@ -165,7 +184,7 @@ void *pmm_alloc(void)
 
     p->next = NULL;
     p->flags = PAGE_USED;
-    p->refcount = 0; /* its not managed else where other than the pmm, we dont need to show it in refcount since we got the magic of our page database :^)*/
+    p->refcount = 0;
     free_pages--;
     used_pages++;
 

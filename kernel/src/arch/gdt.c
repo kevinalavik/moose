@@ -55,5 +55,5 @@ void gdt_init()
         : [gdtr] "m"(kernel_gdtr), [csel] "i"(GDT_KCODE_SEL),
           [dsel] "i"(GDT_KDATA_SEL)
         : "rax", "memory");
-    klog("gdt", COL_STEEL "loaded kernel gdt @ %p" COL_RESET, &kernel_gdtr);
+    klog("gdt", "loaded kernel gdt @ %p", &kernel_gdtr);
 }
