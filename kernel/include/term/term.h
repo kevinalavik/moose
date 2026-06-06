@@ -8,7 +8,12 @@
 #include <term/font.h>
 #include <term/ansi.h>
 
-#define RGB(r, g, b) (((r) << 16) | ((g) << 8) | (b))
+typedef struct
+{
+    unsigned char c;
+    uint32_t fg;
+    uint32_t bg;
+} cell_t;
 
 typedef struct term
 {
@@ -31,6 +36,11 @@ typedef struct term
     bool cursor_drawn;
 
     ansi_parser_t ansi;
+
+    /* cell buffer – avoids all reads from WC framebuffer */
+    cell_t *cells;
+    uint32_t num_cols;
+    uint32_t num_rows;
 } term_t;
 
 void term_init(term_t *t, struct limine_framebuffer *fb,

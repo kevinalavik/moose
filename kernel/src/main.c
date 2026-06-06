@@ -92,10 +92,9 @@ void kmain(void)
         hcf();
     }
 
-    /* todo: make term support any bpp aswell as color shift */
-    if (moose_fb->bpp != 32)
+    if (moose_fb->bpp < 8 || moose_fb->bpp % 8 != 0)
     {
-        klog("moose", COL_BRED "not a 32bpp framebuffer" COL_RESET);
+        klog("moose", COL_BRED "unsupported framebuffer bpp: %d" COL_RESET, moose_fb->bpp);
         hcf();
     }
 

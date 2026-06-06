@@ -2,38 +2,87 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <lib/string.h>
 
-#define TERM_DEFAULT_FG 7
+#define TERM_DEFAULT_FG 3
 #define TERM_DEFAULT_BG 0
 
 #define TAB_WIDTH 8
-#define CURSOR_MASK 0x00ffffff
 
 static void term_reset(term_t *t);
 static int param(term_t *t, uint32_t i, int fallback);
 
-static const uint32_t ansi16[16] = {
-    RGB(0, 0, 0),
-    RGB(170, 0, 0),
-    RGB(0, 170, 0),
-    RGB(170, 85, 0),
-    RGB(0, 0, 170),
-    RGB(170, 0, 170),
-    RGB(0, 170, 170),
-    RGB(170, 170, 170),
-    RGB(85, 85, 85),
-    RGB(255, 85, 85),
-    RGB(85, 255, 85),
-    RGB(255, 255, 85),
-    RGB(85, 85, 255),
-    RGB(255, 85, 255),
-    RGB(85, 255, 255),
-    RGB(255, 255, 255),
+typedef struct
+{
+    uint8_t r, g, b;
+} rgb888_t;
+
+static const rgb888_t ansi16_rgb[16] = {
+    {0, 0, 0},
+    {170, 0, 0},
+    {0, 170, 0},
+    {170, 85, 0},
+    {0, 0, 170},
+    {170, 0, 170},
+    {0, 170, 170},
+    {170, 170, 170},
+    {85, 85, 85},
+    {255, 85, 85},
+    {85, 255, 85},
+    {255, 255, 85},
+    {85, 85, 255},
+    {255, 85, 255},
+    {85, 255, 255},
+    {255, 255, 255},
 };
 
-static uint32_t rgb(uint32_t r, uint32_t g, uint32_t b)
+static uint32_t rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
-    return ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
+    struct limine_framebuffer *fb = t->fb;
+    uint32_t color = 0;
+
+    if (fb->red_mask_size)
+    {
+        uint32_t v = r;
+        if (fb->red_mask_size < 8)
+            v >>= 8 - fb->red_mask_size;
+        color |= v << fb->red_mask_shift;
+    }
+    if (fb->green_mask_size)
+    {
+        uint32_t v = g;
+        if (fb->green_mask_size < 8)
+            v >>= 8 - fb->green_mask_size;
+        color |= v << fb->green_mask_shift;
+    }
+    if (fb->blue_mask_size)
+    {
+        uint32_t v = b;
+        if (fb->blue_mask_size < 8)
+            v >>= 8 - fb->blue_mask_size;
+        color |= v << fb->blue_mask_shift;
+    }
+
+    return color;
+}
+
+static inline uint32_t fb_mask(uint8_t size)
+{
+    if (size >= 32)
+        return 0xFFFFFFFF;
+    return ((uint32_t)1 << size) - 1;
+}
+
+static uint32_t cursor_mask(term_t *t)
+{
+    uint32_t m = 0;
+    if (t->fb->red_mask_size)
+        m |= fb_mask(t->fb->red_mask_size) << t->fb->red_mask_shift;
+    if (t->fb->green_mask_size)
+        m |= fb_mask(t->fb->green_mask_size) << t->fb->green_mask_shift;
+    if (t->fb->blue_mask_size)
+        m |= fb_mask(t->fb->blue_mask_size) << t->fb->blue_mask_shift;
+    return m;
 }
 
 static uint32_t cube_value(uint32_t n)
@@ -41,15 +90,15 @@ static uint32_t cube_value(uint32_t n)
     return n == 0 ? 0 : 55 + n * 40;
 }
 
-static uint32_t ansi_color(uint16_t n)
+static uint32_t ansi_color(term_t *t, uint16_t n)
 {
     if (n < 16)
-        return ansi16[n];
+        return rgb(t, ansi16_rgb[n].r, ansi16_rgb[n].g, ansi16_rgb[n].b);
 
     if (n < 232)
     {
         uint32_t v = n - 16;
-        return rgb(cube_value(v / 36),
+        return rgb(t, cube_value(v / 36),
                    cube_value((v / 6) % 6),
                    cube_value(v % 6));
     }
@@ -57,20 +106,27 @@ static uint32_t ansi_color(uint16_t n)
     if (n < 256)
     {
         uint32_t v = 8 + (n - 232) * 10;
-        return rgb(v, v, v);
+        return rgb(t, v, v, v);
     }
 
-    return ansi16[TERM_DEFAULT_FG];
+    return rgb(t, ansi16_rgb[TERM_DEFAULT_FG].r,
+               ansi16_rgb[TERM_DEFAULT_FG].g,
+               ansi16_rgb[TERM_DEFAULT_FG].b);
 }
 
-static volatile uint32_t *pixels(term_t *t)
+static volatile uint8_t *pixels(term_t *t)
 {
-    return (volatile uint32_t *)t->fb->address;
+    return (volatile uint8_t *)t->fb->address;
 }
 
 static uint32_t pitch(term_t *t)
 {
-    return (uint32_t)(t->fb->pitch / sizeof(uint32_t));
+    return (uint32_t)t->fb->pitch;
+}
+
+static uint32_t fb_bpb(term_t *t)
+{
+    return t->fb->bpp / 8;
 }
 
 static uint32_t cw(term_t *t) { return t->font.width; }
@@ -95,12 +151,12 @@ static uint16_t effective_fg(term_t *t)
 
 static uint32_t real_fg(term_t *t)
 {
-    return t->fg_is_rgb ? t->fg_rgb : ansi_color(effective_fg(t));
+    return t->fg_is_rgb ? t->fg_rgb : ansi_color(t, effective_fg(t));
 }
 
 static uint32_t real_bg(term_t *t)
 {
-    return t->bg_is_rgb ? t->bg_rgb : ansi_color(t->bg);
+    return t->bg_is_rgb ? t->bg_rgb : ansi_color(t, t->bg);
 }
 
 static uint32_t fg_col(term_t *t)
@@ -135,7 +191,7 @@ static void set_fg_rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
     if (r <= 255 && g <= 255 && b <= 255)
     {
-        t->fg_rgb = rgb(r, g, b);
+        t->fg_rgb = rgb(t, r, g, b);
         t->fg_is_rgb = true;
     }
 }
@@ -144,7 +200,7 @@ static void set_bg_rgb(term_t *t, uint32_t r, uint32_t g, uint32_t b)
 {
     if (r <= 255 && g <= 255 && b <= 255)
     {
-        t->bg_rgb = rgb(r, g, b);
+        t->bg_rgb = rgb(t, r, g, b);
         t->bg_is_rgb = true;
     }
 }
@@ -175,12 +231,13 @@ static void clear_rect(term_t *t,
     if (y0 + h > t->fb->height)
         h = t->fb->height - y0;
 
-    volatile uint32_t *fb = pixels(t);
+    uint32_t bpb = fb_bpb(t);
+    volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
 
     for (uint32_t y = 0; y < h; y++)
     {
-        volatile uint32_t *row = fb + (y0 + y) * pt + x0;
+        volatile uint32_t *row = (volatile uint32_t *)(fb + (y0 + y) * pt + x0 * bpb);
         for (uint32_t x = 0; x < w; x++)
             row[x] = color;
     }
@@ -197,17 +254,16 @@ static void scroll_pixels(term_t *t, uint32_t amount)
         return;
     }
 
-    volatile uint32_t *fb = pixels(t);
+    volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
     uint32_t h = t->fb->height - amount;
+    size_t row_bytes = t->fb->width * fb_bpb(t);
 
     for (uint32_t y = 0; y < h; y++)
     {
-        volatile uint32_t *dst = fb + y * pt;
-        volatile uint32_t *src = fb + (y + amount) * pt;
-        for (uint32_t x = 0; x < t->fb->width; x++)
-            dst[x] = src[x];
+        memmove((void *)(fb + y * pt), (void *)(fb + (y + amount) * pt), row_bytes);
     }
+
     clear_rect(t, 0, h, t->fb->width, amount, bg_col(t));
 }
 
@@ -231,10 +287,15 @@ static void ensure_visible(term_t *t)
         return;
     }
 
-    while (t->cy + h > t->fb->height)
+    if (t->cy + h > t->fb->height)
     {
-        scroll_lines(t, 1);
-        t->cy = (t->cy >= h) ? t->cy - h : 0;
+        uint32_t overflow = t->cy + h - t->fb->height;
+        uint32_t lines = (overflow + h - 1) / h;
+        scroll_lines(t, lines);
+        if (t->cy >= lines * h)
+            t->cy -= lines * h;
+        else
+            t->cy = 0;
     }
 }
 
@@ -249,14 +310,23 @@ static void cursor_flip(term_t *t)
     if (t->cx + cw_ > t->fb->width || t->cy + ch_ > t->fb->height)
         return;
 
-    volatile uint32_t *fb = pixels(t);
+    uint32_t bpb = fb_bpb(t);
+    uint32_t cmask = cursor_mask(t);
+    volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
 
     for (uint32_t y = 0; y < ch_; y++)
     {
-        volatile uint32_t *row = fb + (t->cy + y) * pt + t->cx;
+        volatile uint8_t *row = fb + (t->cy + y) * pt + t->cx * bpb;
         for (uint32_t x = 0; x < cw_; x++)
-            row[x] ^= CURSOR_MASK;
+        {
+            uint32_t val = 0;
+            for (uint32_t b = 0; b < bpb; b++)
+                val |= (uint32_t)row[x * bpb + b] << (b * 8);
+            val ^= cmask;
+            for (uint32_t b = 0; b < bpb; b++)
+                row[x * bpb + b] = (val >> (b * 8)) & 0xff;
+        }
     }
 }
 
@@ -701,7 +771,8 @@ static void put_glyph(term_t *t, char c)
 
     uint32_t idx = psf_glyph_index(&t->font, (unsigned char)c);
 
-    volatile uint32_t *fb = pixels(t);
+    uint32_t bpb = fb_bpb(t);
+    volatile uint8_t *fb = pixels(t);
     uint32_t pt = pitch(t);
     uint32_t fg = fg_col(t);
     uint32_t bg = bg_col(t);
@@ -727,7 +798,11 @@ static void put_glyph(term_t *t, char c)
                 continue;
 
             if ((row[xo / 8] >> (7 - (xo % 8))) & 1)
-                fb[y * pt + x] = fg;
+            {
+                volatile uint8_t *p = fb + y * pt + x * bpb;
+                for (uint32_t b = 0; b < bpb; b++)
+                    p[b] = (fg >> (b * 8)) & 0xff;
+            }
         }
     }
 
@@ -789,7 +864,7 @@ void term_init(term_t *t, struct limine_framebuffer *fb,
     reset_attrs(t);
 
     if (t->fb && t->fb->address)
-        clear_rect(t, 0, 0, t->fb->width, t->fb->height, ansi_color(TERM_DEFAULT_BG));
+        clear_rect(t, 0, 0, t->fb->width, t->fb->height, ansi_color(t, TERM_DEFAULT_BG));
 
     cursor_show(t);
 }
@@ -846,6 +921,8 @@ void term_puts(term_t *t, const char *s)
 {
     if (!s)
         return;
+    cursor_hide(t);
     while (*s)
         term_putc(t, *s++);
+    cursor_show(t);
 }
