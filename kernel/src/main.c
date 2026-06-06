@@ -153,7 +153,6 @@ void kmain(void)
         klog("early", "Wrote \"%d\" to %p", *a, a);
         pmm_unref(a); /* not managed by us when we are done */
         pmm_free(a);
-
         /*
             NOTE: the ref/unref calls are not nesecary, i just do it to test :^)
         */
