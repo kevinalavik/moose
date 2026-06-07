@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <lib/string.h>
 
-#define TERM_DEFAULT_FG 7
+#define TERM_DEFAULT_FG 8
 #define TERM_DEFAULT_BG 0
 #define TAB_WIDTH 8
 #define TERM_INLINE_POOL 0x200000
