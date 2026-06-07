@@ -161,5 +161,8 @@ void kmain(void)
     kernel_virt = kernel_file_request.response->virtual_base;
     kernel_phys = kernel_file_request.response->physical_base;
     paging_init();
+
+    kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
+
     hlt();
 }
