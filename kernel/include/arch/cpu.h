@@ -31,6 +31,13 @@ static inline void sti()
     __asm__ volatile("sti");
 }
 
+static inline uint64_t read_cr2(void)
+{
+    uint64_t cr2;
+    __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+    return cr2;
+}
+
 static inline uint64_t read_cr3(void)
 {
     uint64_t cr3;

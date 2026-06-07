@@ -2,6 +2,7 @@
 #define LIB_MATH_H
 
 #include <stdint.h>
+#include <util/printf.h>
 
 /* math utils for moose kernel :^() */
 #define ALIGN_UP(x, y) (((x) + ((y) - 1)) & ~((y) - 1))

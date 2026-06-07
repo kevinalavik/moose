@@ -123,7 +123,8 @@ int map_page(ptable_t *pml4, uint64_t vaddr, uint64_t paddr, uint64_t flags)
     entry = pt->entries[PT_INDEX(vaddr)];
     if (entry & PTE_PRESENT)
     {
-        klog("paging", COL_AMBER "remapping VA=%p (old PA=%p new PA=%p)" COL_RESET, vaddr, entry & PTE_ADDR_MASK, paddr);
+        if ((entry & PTE_ADDR_MASK) != (paddr & PTE_ADDR_MASK))
+            klog("paging", COL_AMBER "remapping VA=%p (old PA=%p new PA=%p)" COL_RESET, vaddr, entry & PTE_ADDR_MASK, paddr);
     }
 
     pt->entries[PT_INDEX(vaddr)] = (paddr & PTE_ADDR_MASK) | flags | PTE_PRESENT;
@@ -218,16 +219,6 @@ void paging_init()
     MAP_SECTION(__rodata_start, __rodata_end, PTE_NX);
     MAP_SECTION(__data_start, __data_end, PTE_RW | PTE_NX);
 
-    uint64_t fb_vaddr = (uint64_t)moose_fb->address;
-    uint64_t fb_size = ALIGN_UP(moose_fb->pitch * moose_fb->height, PAGE_SIZE);
-
-    for (uint64_t i = 0; i < fb_size; i += PAGE_SIZE)
-    {
-        uint64_t vaddr = fb_vaddr + i;
-        uint64_t paddr = vaddr - kernel_virt + kernel_phys;
-        map_page(PHYS_TO_VIRT(kernel_ptable), vaddr, paddr, PTE_RW | PTE_NX);
-    }
-
     ptable_t *new_pml4 = (ptable_t *)PHYS_TO_VIRT((uint64_t)kernel_ptable);
     ptable_t *boot_pml4 = (ptable_t *)PHYS_TO_VIRT(read_cr3());
 
@@ -239,6 +230,5 @@ void paging_init()
     klog("paging", "  text:            0x%llx -> 0x%llx [RX]", (uint64_t)__text_start, (uint64_t)__text_end);
     klog("paging", "  rodata:          0x%llx -> 0x%llx [RO NX]", (uint64_t)__rodata_start, (uint64_t)__rodata_end);
     klog("paging", "  data/bss:        0x%llx -> 0x%llx [RW NX]", (uint64_t)__data_start, (uint64_t)__data_end);
-    klog("paging", "  framebuffer:     0x%llx -> 0x%llx [RW NX]", fb_vaddr, fb_vaddr + fb_size);
     ptable_load(kernel_ptable);
 }

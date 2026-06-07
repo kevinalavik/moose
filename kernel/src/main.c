@@ -14,6 +14,8 @@
 #include <term/builtin_font.h>
 #include <fs/cpio.h>
 #include <arch/paging.h>
+#include <mm/vma.h>
+#include <mm/kheap.h>
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -162,7 +164,28 @@ void kmain(void)
     kernel_phys = kernel_file_request.response->physical_base;
     paging_init();
 
+    static vctx_t kernel_vctx;
+    vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
+    current_vctx = &kernel_vctx; /* todo: when we got scheduler we actually store this in the pcb */
+
+    uint64_t fb_phys = VIRT_TO_PHYS((uint64_t)moose_fb->address);
+    uint64_t fb_vaddr = (uint64_t)moose_fb->address;
+    uint64_t fb_size = ALIGN_UP((uint64_t)(moose_fb->pitch * moose_fb->height), PAGE_SIZE);
+    vma_map_phys(&kernel_vctx, fb_vaddr, fb_phys, fb_size,
+                 VMA_PROT_READ | VMA_PROT_WRITE, 0);
+    klog("moose", "mapped framebuffer @ %p (%s)", fb_vaddr, size_to_str(fb_size));
+
     kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
+
+    uint64_t *a = kmalloc(64);
+    kprintf("kmalloc(64) = %p\n", a);
+    *a = 69;
+    kprintf("(after write) %p = %d\n", a, *a);
+    kfree(a);
+
+    vma_map_anon(&kernel_vctx, 0xdeadbeef, 4096, VMA_PROT_READ | VMA_PROT_WRITE, 0);
+    *(uint64_t *)0xdeadbeef = 42;
+    kprintf("0xdeadbeef = %d\n", *(uint64_t *)0xdeadbeef);
 
     hlt();
 }

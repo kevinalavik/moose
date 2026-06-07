@@ -2,15 +2,13 @@
 #define MM_VMA_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <arch/paging.h>
 #include <mm/pmm.h>
 
 #define VMA_PROT_READ (1 << 0)
 #define VMA_PROT_WRITE (1 << 1)
 #define VMA_PROT_EXEC (1 << 2)
-
-#define VMA_FLAG_SHARED (1 << 0) /* todo */
-#define VMA_FLAG_FIXED (1 << 1)
 
 typedef enum
 {
@@ -21,17 +19,7 @@ typedef enum
 typedef struct vm_object
 {
     vm_object_type_t type;
-    union
-    {
-        struct
-        {
-            int placeholder;
-        } anon;
-        struct
-        {
-            uint64_t phys_base;
-        } phys;
-    };
+    void *data;
 } vm_object_t;
 
 typedef struct vma
@@ -40,7 +28,7 @@ typedef struct vma
     uint64_t end;
 
     uint32_t prot;  /* VMA_PROTs */
-    uint32_t flags; /* VMA_FLAGs*/
+    uint32_t flags; /* todo */
 
     vm_object_t *obj;
 
@@ -60,5 +48,7 @@ int vma_map_anon(vctx_t *ctx, uint64_t addr, uint64_t size, uint32_t prot, uint3
 int vma_map_phys(vctx_t *ctx, uint64_t vaddr, uint64_t phys, uint64_t size, uint32_t prot, uint32_t flags);
 int vma_unmap(vctx_t *ctx, uint64_t addr, uint64_t size);
 int vma_handle_fault(vctx_t *ctx, uint64_t addr, bool is_write, bool is_user);
+
+extern vctx_t *current_vctx;
 
 #endif /* MM_VMA_H */

@@ -1,5 +1,5 @@
 #include <term/term.h>
-#include <lib/heap.h>
+#include <mm/kheap.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -930,7 +930,7 @@ void term_init(term_t *t, struct limine_framebuffer *fb,
     t->num_rows = fb->height / t->font.height;
 
     size_t n = (size_t)t->num_cols * t->num_rows;
-    t->cells = malloc(n * sizeof(cell_t));
+    t->cells = kmalloc(n * sizeof(cell_t));
     if (!t->cells)
         t->cells = term_alloc(n * sizeof(cell_t));
 

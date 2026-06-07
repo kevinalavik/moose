@@ -4,6 +4,7 @@
 #include <dev/tty.h>
 #include <arch/gdt.h>
 #include <stdbool.h>
+#include <mm/vma.h>
 
 __attribute__((aligned(16))) static idt_entry_t idt[256];
 static idtr_t idtr;
@@ -12,19 +13,32 @@ static bool vectors[256];
 static bool warned[256];
 
 extern void *isr_stub_table[];
-
-__attribute__((noreturn)) void exception_handler(int_frame_t *frame)
+static int exception_handler(int_frame_t *frame)
 {
-    klog("panic", COL_BRED "exception vector=%lu error=%02x rip=0x%.16llx" COL_RESET, frame->vector, frame->error_code, frame->rip);
+    if (frame->vector == 14)
+    {
+        uint64_t fault_addr = read_cr2();
+        bool is_write = frame->error_code & 0x2;
+        bool is_user = frame->error_code & 0x4;
+
+        if (current_vctx && vma_handle_fault(current_vctx, fault_addr, is_write, is_user) == 0)
+            return 0;
+    }
+
+    klog("panic", COL_BRED "exception vector=%lu error=%02x rip=0x%.16llx rsp=0x%.16llx cr2=0x%.16llx" COL_RESET,
+         frame->vector, frame->error_code, frame->rip, frame->rsp, (frame->vector == 14) ? read_cr2() : 0);
     hcf();
+    __builtin_unreachable();
 }
 
 void interrupt_handler(int_frame_t *frame)
 {
     if (frame->vector < 32)
-        exception_handler(frame);
+    {
+        if (exception_handler(frame) == 0)
+            return;
+    }
 
-    /* dont spam on unhandled IRQs like handler */
     if (!warned[frame->vector])
     {
         warned[frame->vector] = true;
