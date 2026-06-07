@@ -1,6 +1,7 @@
 #include <limine.h>
 #include <lib/string.h>
 #include <dev/tty.h>
+#include <dev/tsc.h>
 #include <sys/moose.h>
 #include <util/printf.h>
 #include <sys/klog.h>
@@ -100,6 +101,7 @@ void kmain(void)
 
     tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
     klog("moose", "using %s", device_label(&tty0));
+    tsc_init();
 
     gdt_init();
     idt_init();
