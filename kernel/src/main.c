@@ -13,9 +13,10 @@
 #include <lib/math.h>
 #include <term/builtin_font.h>
 #include <fs/cpio.h>
+#include <fs/vfs.h>
+#include <fs/tmpfs.h>
 #include <arch/paging.h>
 #include <mm/vma.h>
-#include <mm/kheap.h>
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -55,6 +56,7 @@ uint64_t kernel_phys = 0;
 
 handle_t com1;
 handle_t tty0;
+
 int putc(char ch)
 {
     if (com1.dev)
@@ -66,6 +68,8 @@ int putc(char ch)
 
 void kmain(void)
 {
+    struct limine_file *initrd = NULL;
+
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
         hcf();
 
@@ -137,7 +141,6 @@ void kmain(void)
 
     if (module_request.response)
     {
-        struct limine_file *initrd = NULL;
         klog("moose", "module list:");
         for (uint64_t i = 0; i < module_request.response->module_count; i++)
         {
@@ -145,12 +148,6 @@ void kmain(void)
             klog("moose", "  [%d] %s: %d bytes", i, mod->path, mod->size);
             if (strcmp(mod->path, "/boot/initrd.cpio") == 0)
                 initrd = mod;
-        }
-
-        if (initrd)
-        {
-            klog("moose", "found initrd @ %s", initrd->path);
-            cpio_parse(initrd->address, initrd->size);
         }
     }
 
@@ -174,18 +171,36 @@ void kmain(void)
     vma_map_phys(&kernel_vctx, fb_vaddr, fb_phys, fb_size,
                  VMA_PROT_READ | VMA_PROT_WRITE, 0);
     klog("moose", "mapped framebuffer @ %p (%s)", fb_vaddr, size_to_str(fb_size));
+    vfs_init();
+    struct vfs_superblock *sb = tmpfs_mount();
+    if (sb)
+    {
+        vfs_mount_root("/", sb);
+
+        if (initrd)
+        {
+            klog("moose", "found initrd @ %s", initrd->path);
+            cpio_archive_extract(sb->s_root, initrd->address, initrd->size);
+        }
+    }
 
     kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
 
-    uint64_t *a = kmalloc(64);
-    kprintf("kmalloc(64) = %p\n", a);
-    *a = 69;
-    kprintf("(after write) %p = %d\n", a, *a);
-    kfree(a);
+    struct vfs_file *f = vfs_open("/test.txt", O_RDONLY);
 
-    vma_map_anon(&kernel_vctx, 0xdeadbeef, 4096, VMA_PROT_READ | VMA_PROT_WRITE, 0);
-    *(uint64_t *)0xdeadbeef = 42;
-    kprintf("0xdeadbeef = %d\n", *(uint64_t *)0xdeadbeef);
+    if (f)
+    {
+        char buf[256];
+        ssize_t n = vfs_file_read(f, buf, sizeof(buf) - 1);
+
+        if (n > 0)
+        {
+            buf[n] = '\0';
+            kprintf("/test.txt: %s\n", buf);
+        }
+
+        vfs_close(f);
+    }
 
     hlt();
 }

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <fs/vfs.h>
 
 #define CPIO_NEWC_MAGIC "070701"
 
@@ -24,6 +25,6 @@ typedef struct
     char c_check[8];
 } cpio_header_t;
 
-void cpio_parse(void *buf, size_t len);
+int cpio_archive_extract(struct vfs_inode *root, void *buf, size_t len);
 
 #endif /* FS_CPIO_H */

@@ -125,3 +125,27 @@ int strcmp(const char *a, const char *b)
 
     return (unsigned char)*a - (unsigned char)*b;
 }
+
+char *strcpy(char *restrict dst, const char *restrict src)
+{
+    char *ret = dst;
+
+    while ((*dst++ = *src++))
+        ;
+
+    return ret;
+}
+
+char *strrchr(const char *s, int c)
+{
+    const char *last = NULL;
+
+    while (*s)
+    {
+        if (*s == (char)c)
+            last = s;
+        s++;
+    }
+
+    return (char *)last;
+}
