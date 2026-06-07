@@ -103,37 +103,22 @@ struct vfs_file
     int flags;
 };
 
-/* VFS core */
 void vfs_init(void);
-struct vfs_superblock *vfs_mount_root(const char *path,
-                                      struct vfs_superblock *sb);
-
-/* Path resolution */
+struct vfs_superblock *vfs_mount_root(const char *path, struct vfs_superblock *sb);
 struct vfs_inode *vfs_resolve(struct vfs_inode *root, const char *path);
 struct vfs_inode *vfs_lookup(struct vfs_inode *parent, const char *name);
-
-/* Inode operations – dispatch through i_ops */
 int vfs_mkdir(struct vfs_inode *parent, const char *name, mode_t mode);
 int vfs_create(struct vfs_inode *parent, const char *name, mode_t mode,
                struct vfs_inode **out);
 int vfs_mkdir_p(struct vfs_inode *root, const char *path, mode_t mode);
-
-/* File operations – dispatch through f_op */
 struct vfs_file *vfs_open(const char *path, int flags);
 void vfs_close(struct vfs_file *file);
 ssize_t vfs_file_read(struct vfs_file *file, void *buf, size_t count);
-ssize_t vfs_file_write(struct vfs_file *file, const void *buf,
-                       size_t count);
-int vfs_file_readdir(struct vfs_file *file,
-                     struct vfs_dirent *dirent);
+ssize_t vfs_file_write(struct vfs_file *file, const void *buf, size_t count);
+int vfs_file_readdir(struct vfs_file *file, struct vfs_dirent *dirent);
 loff_t vfs_llseek(struct vfs_file *file, loff_t offset, int whence);
-
-/* Raw inode-level helpers – build a temporary file behind the scenes */
-ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count,
-                 off_t offset);
-ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count,
-                  off_t offset);
-int vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent,
-                size_t *pos);
+ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count, off_t offset);
+ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count, off_t offset);
+int vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent, size_t *pos);
 
 #endif /* FS_VFS_H */
