@@ -5,64 +5,61 @@
 #include <lib/string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <sys/types.h>
 
-struct tmpfs_dirent {
-    char                 name[256];
-    struct vfs_inode    *inode;
+struct tmpfs_dirent
+{
+    char name[256];
+    struct vfs_inode *inode;
     struct tmpfs_dirent *next;
 };
 
 /* inode ops */
 static struct vfs_inode *tmpfs_lookup(struct vfs_inode *dir, const char *name);
-static int  tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode);
-static int  tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode,
-                          struct vfs_inode **out);
+static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode);
+static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode, struct vfs_inode **out);
 
 /* file ops */
-static int     tmpfs_open(struct vfs_inode *inode, struct vfs_file *file);
-static int     tmpfs_release(struct vfs_inode *inode, struct vfs_file *file);
-static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count,
-                           loff_t *pos);
-static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
-                            size_t count, loff_t *pos);
-static int     tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent,
-                              loff_t *pos);
-static loff_t  tmpfs_llseek(struct vfs_file *file, loff_t offset, int whence);
+static int tmpfs_open(struct vfs_inode *inode, struct vfs_file *file);
+static int tmpfs_release(struct vfs_inode *inode, struct vfs_file *file);
+static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count, loff_t *pos);
+static ssize_t tmpfs_write(struct vfs_file *file, const void *buf, size_t count, loff_t *pos);
+static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent, loff_t *pos);
+static loff_t tmpfs_llseek(struct vfs_file *file, loff_t offset, int whence);
 
 static const struct vfs_inode_ops tmpfs_dir_iops = {
     .lookup = tmpfs_lookup,
-    .mkdir  = tmpfs_mkdir,
+    .mkdir = tmpfs_mkdir,
     .create = tmpfs_create,
 };
 
 static const struct vfs_file_ops tmpfs_dir_fops = {
-    .open    = tmpfs_open,
+    .open = tmpfs_open,
     .release = tmpfs_release,
     .readdir = tmpfs_readdir,
-    .llseek  = tmpfs_llseek,
+    .llseek = tmpfs_llseek,
 };
 
 static const struct vfs_file_ops tmpfs_reg_fops = {
-    .open    = tmpfs_open,
+    .open = tmpfs_open,
     .release = tmpfs_release,
-    .read    = tmpfs_read,
-    .write   = tmpfs_write,
-    .llseek  = tmpfs_llseek,
+    .read = tmpfs_read,
+    .write = tmpfs_write,
+    .llseek = tmpfs_llseek,
 };
 
-static struct vfs_inode *tmpfs_alloc_inode(struct vfs_superblock *sb,
-                                            mode_t mode)
+static struct vfs_inode *tmpfs_alloc_inode(struct vfs_superblock *sb, mode_t mode)
 {
     struct vfs_inode *inode = kmalloc(sizeof(struct vfs_inode));
     if (!inode)
         return NULL;
 
-    inode->ino     = sb->s_ino_counter++;
-    inode->mode    = mode;
-    inode->size    = 0;
-    inode->nlink   = 1;
-    inode->sb      = sb;
-    inode->parent  = NULL;
+    inode->ino = sb->s_ino_counter++;
+    inode->mode = mode;
+    inode->size = 0;
+    inode->nlink = 1;
+    inode->sb = sb;
+    inode->parent = NULL;
     inode->private_data = NULL;
 
     if (S_ISDIR(mode))
@@ -84,8 +81,7 @@ static struct vfs_inode *tmpfs_alloc_inode(struct vfs_superblock *sb,
     return inode;
 }
 
-static int tmpfs_add_dirent(struct vfs_inode *dir, const char *name,
-                             struct vfs_inode *child)
+static int tmpfs_add_dirent(struct vfs_inode *dir, const char *name, struct vfs_inode *child)
 {
     struct tmpfs_dirent *ent;
 
@@ -100,7 +96,7 @@ static int tmpfs_add_dirent(struct vfs_inode *dir, const char *name,
     memcpy(ent->name, name, nlen);
     ent->name[nlen - 1] = '\0';
     ent->inode = child;
-    ent->next  = dir->private_data;
+    ent->next = dir->private_data;
     dir->private_data = ent;
 
     return 0;
@@ -142,7 +138,6 @@ static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode)
         return -1;
 
     child->parent = dir;
-
     err = tmpfs_add_dirent(dir, name, child);
     if (err)
     {
@@ -155,12 +150,11 @@ static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode)
     tmpfs_add_dirent(child, ".", child);
     tmpfs_add_dirent(child, "..", dir);
     child->nlink += 2;
-
     return 0;
 }
 
 static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode,
-                         struct vfs_inode **out)
+                        struct vfs_inode **out)
 {
     struct vfs_superblock *sb;
     struct vfs_inode *child;
@@ -178,7 +172,6 @@ static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode,
         return -1;
 
     child->parent = dir;
-
     err = tmpfs_add_dirent(dir, name, child);
     if (err)
     {
@@ -206,8 +199,7 @@ static int tmpfs_release(struct vfs_inode *inode, struct vfs_file *file)
     return 0;
 }
 
-static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count,
-                           loff_t *pos)
+static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count, loff_t *pos)
 {
     struct vfs_inode *inode = file->inode;
     size_t avail;
@@ -230,7 +222,7 @@ static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count,
 }
 
 static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
-                            size_t count, loff_t *pos)
+                           size_t count, loff_t *pos)
 {
     struct vfs_inode *inode = file->inode;
     void *new_data;
@@ -239,7 +231,6 @@ static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
         return -1;
 
     size_t needed = (size_t)*pos + count;
-
     if (needed > inode->size)
     {
         new_data = kmalloc(needed);
@@ -257,7 +248,6 @@ static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
     }
 
     memcpy((uint8_t *)inode->private_data + *pos, buf, count);
-
     if ((size_t)(*pos + count) > inode->size)
         inode->size = (size_t)(*pos + count);
 
@@ -265,8 +255,7 @@ static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
     return count;
 }
 
-static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent,
-                          loff_t *pos)
+static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent, loff_t *pos)
 {
     struct vfs_inode *inode = file->inode;
     struct tmpfs_dirent *ent;

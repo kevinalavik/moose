@@ -12,8 +12,7 @@ void vfs_init(void)
     klog("vfs", "initialized");
 }
 
-struct vfs_superblock *vfs_mount_root(const char *path,
-                                       struct vfs_superblock *sb)
+struct vfs_superblock *vfs_mount_root(const char *path, struct vfs_superblock *sb)
 {
     struct vfs_mount *mnt = kmalloc(sizeof(struct vfs_mount));
     if (!mnt)
@@ -27,7 +26,7 @@ struct vfs_superblock *vfs_mount_root(const char *path,
         return NULL;
     }
     memcpy(mnt->path, path, plen);
-    mnt->sb   = sb;
+    mnt->sb = sb;
     mnt->root = sb->s_root;
     mnt->next = NULL;
 
@@ -65,7 +64,6 @@ struct vfs_inode *vfs_resolve(struct vfs_inode *root, const char *path)
     while (*p)
     {
         size_t i = 0;
-
         while (*p && *p != '/' && i < sizeof(component) - 1)
             component[i++] = *p++;
         component[i] = '\0';
@@ -114,7 +112,7 @@ int vfs_mkdir_p(struct vfs_inode *root, const char *path, mode_t mode)
     struct vfs_inode *cur;
     struct vfs_inode *existing;
     char buf[256];
-    (void)mode;
+    (void)mode; /* todo: support mode */
 
     if (!root || !path)
         return -1;
@@ -197,8 +195,8 @@ struct vfs_file *vfs_open(const char *path, int flags)
         return NULL;
 
     file->inode = inode;
-    file->f_op  = inode->f_ops;
-    file->pos   = 0;
+    file->f_op = inode->f_ops;
+    file->pos = 0;
     file->flags = flags;
 
     if (file->f_op && file->f_op->open)
@@ -259,8 +257,8 @@ ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count,
     struct vfs_file tmp;
 
     tmp.inode = inode;
-    tmp.f_op  = inode->f_ops;
-    tmp.pos   = offset;
+    tmp.f_op = inode->f_ops;
+    tmp.pos = offset;
     tmp.flags = O_RDONLY;
 
     loff_t pos = offset;
@@ -276,8 +274,8 @@ ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count,
     struct vfs_file tmp;
 
     tmp.inode = inode;
-    tmp.f_op  = inode->f_ops;
-    tmp.pos   = offset;
+    tmp.f_op = inode->f_ops;
+    tmp.pos = offset;
     tmp.flags = O_WRONLY;
 
     loff_t pos = offset;
@@ -294,8 +292,8 @@ int vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent,
     struct vfs_file tmp;
 
     tmp.inode = inode;
-    tmp.f_op  = inode->f_ops;
-    tmp.pos   = 0;
+    tmp.f_op = inode->f_ops;
+    tmp.pos = 0;
     tmp.flags = O_RDONLY;
 
     loff_t loff = (loff_t)*pos;

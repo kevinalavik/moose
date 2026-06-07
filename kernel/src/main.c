@@ -164,13 +164,6 @@ void kmain(void)
     static vctx_t kernel_vctx;
     vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
     current_vctx = &kernel_vctx; /* todo: when we got scheduler we actually store this in the pcb */
-
-    uint64_t fb_phys = VIRT_TO_PHYS((uint64_t)moose_fb->address);
-    uint64_t fb_vaddr = (uint64_t)moose_fb->address;
-    uint64_t fb_size = ALIGN_UP((uint64_t)(moose_fb->pitch * moose_fb->height), PAGE_SIZE);
-    vma_map_phys(&kernel_vctx, fb_vaddr, fb_phys, fb_size,
-                 VMA_PROT_READ | VMA_PROT_WRITE, 0);
-    klog("moose", "mapped framebuffer @ %p (%s)", fb_vaddr, size_to_str(fb_size));
     vfs_init();
     struct vfs_superblock *sb = tmpfs_mount();
     if (sb)
@@ -187,18 +180,15 @@ void kmain(void)
     kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
 
     struct vfs_file *f = vfs_open("/test.txt", O_RDONLY);
-
     if (f)
     {
         char buf[256];
         ssize_t n = vfs_file_read(f, buf, sizeof(buf) - 1);
-
         if (n > 0)
         {
             buf[n] = '\0';
             kprintf("/test.txt: %s\n", buf);
         }
-
         vfs_close(f);
     }
 

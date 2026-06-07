@@ -1,8 +1,7 @@
 #ifndef FS_VFS_H
 #define FS_VFS_H
 
-#include <stdint.h>
-#include <stddef.h>
+#include <sys/types.h>
 
 #define S_IFMT 0170000
 #define S_IFREG 0100000
@@ -34,45 +33,37 @@
 
 #define O_RDONLY 0
 #define O_WRONLY 1
-#define O_RDWR   2
+#define O_RDWR 2
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
-
-typedef uint64_t ino_t;
-typedef int64_t  off_t;
-typedef int64_t  loff_t;
-typedef int64_t  ssize_t;
-typedef unsigned int mode_t;
 
 struct vfs_superblock;
 struct vfs_inode;
 struct vfs_dirent;
 struct vfs_file;
 
-struct vfs_inode_ops {
+struct vfs_inode_ops
+{
     struct vfs_inode *(*lookup)(struct vfs_inode *dir, const char *name);
     int (*mkdir)(struct vfs_inode *dir, const char *name, mode_t mode);
-    int (*create)(struct vfs_inode *dir, const char *name, mode_t mode,
-                  struct vfs_inode **out);
+    int (*create)(struct vfs_inode *dir, const char *name, mode_t mode, struct vfs_inode **out);
 };
 
-struct vfs_file_ops {
-    ssize_t (*read)(struct vfs_file *file, void *buf, size_t count,
-                    loff_t *pos);
-    ssize_t (*write)(struct vfs_file *file, const void *buf, size_t count,
-                     loff_t *pos);
-    int     (*readdir)(struct vfs_file *file, struct vfs_dirent *dirent,
-                       loff_t *pos);
-    int     (*open)(struct vfs_inode *inode, struct vfs_file *file);
-    int     (*release)(struct vfs_inode *inode, struct vfs_file *file);
-    loff_t  (*llseek)(struct vfs_file *file, loff_t offset, int whence);
+struct vfs_file_ops
+{
+    ssize_t (*read)(struct vfs_file *file, void *buf, size_t count, loff_t *pos);
+    ssize_t (*write)(struct vfs_file *file, const void *buf, size_t count, loff_t *pos);
+    int (*readdir)(struct vfs_file *file, struct vfs_dirent *dirent, loff_t *pos);
+    int (*open)(struct vfs_inode *inode, struct vfs_file *file);
+    int (*release)(struct vfs_inode *inode, struct vfs_file *file);
+    loff_t (*llseek)(struct vfs_file *file, loff_t offset, int whence);
 };
 
 struct vfs_inode
 {
-    ino_t  ino;
+    ino_t ino;
     mode_t mode;
     uint64_t size;
     uint64_t nlink;
@@ -93,7 +84,7 @@ struct vfs_superblock
 struct vfs_dirent
 {
     ino_t d_ino;
-    char  d_name[VFS_DIRENT_NAME_LEN];
+    char d_name[VFS_DIRENT_NAME_LEN];
 };
 
 struct vfs_mount
@@ -104,11 +95,12 @@ struct vfs_mount
     char *path;
 };
 
-struct vfs_file {
-    struct vfs_inode           *inode;
-    const struct vfs_file_ops  *f_op;
-    loff_t                      pos;
-    int                         flags;
+struct vfs_file
+{
+    struct vfs_inode *inode;
+    const struct vfs_file_ops *f_op;
+    loff_t pos;
+    int flags;
 };
 
 /* VFS core */
@@ -128,20 +120,20 @@ int vfs_mkdir_p(struct vfs_inode *root, const char *path, mode_t mode);
 
 /* File operations – dispatch through f_op */
 struct vfs_file *vfs_open(const char *path, int flags);
-void             vfs_close(struct vfs_file *file);
-ssize_t          vfs_file_read(struct vfs_file *file, void *buf, size_t count);
-ssize_t          vfs_file_write(struct vfs_file *file, const void *buf,
-                                size_t count);
-int              vfs_file_readdir(struct vfs_file *file,
-                                  struct vfs_dirent *dirent);
-loff_t           vfs_llseek(struct vfs_file *file, loff_t offset, int whence);
+void vfs_close(struct vfs_file *file);
+ssize_t vfs_file_read(struct vfs_file *file, void *buf, size_t count);
+ssize_t vfs_file_write(struct vfs_file *file, const void *buf,
+                       size_t count);
+int vfs_file_readdir(struct vfs_file *file,
+                     struct vfs_dirent *dirent);
+loff_t vfs_llseek(struct vfs_file *file, loff_t offset, int whence);
 
 /* Raw inode-level helpers – build a temporary file behind the scenes */
 ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count,
                  off_t offset);
 ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count,
                   off_t offset);
-int     vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent,
-                    size_t *pos);
+int vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent,
+                size_t *pos);
 
 #endif /* FS_VFS_H */
