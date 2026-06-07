@@ -5,7 +5,7 @@
 #include <term/ansi.h>
 #include <dev/tsc.h>
 
-#define BLIND_MODE 1
+#define BLIND_MODE 0
 
 #if BLIND_MODE == 1
 #define KLOG_COL COL_BRIGHT
