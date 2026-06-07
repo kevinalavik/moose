@@ -126,9 +126,6 @@ int map_page(ptable_t *pml4, uint64_t vaddr, uint64_t paddr, uint64_t flags)
         klog("paging", COL_AMBER "remapping VA=%p (old PA=%p new PA=%p)" COL_RESET, vaddr, entry & PTE_ADDR_MASK, paddr);
     }
 
-    if (flags & PTE_RW)
-        flags |= PTE_NX;
-
     pt->entries[PT_INDEX(vaddr)] = (paddr & PTE_ADDR_MASK) | flags | PTE_PRESENT;
     return 0;
 }
@@ -220,19 +217,28 @@ void paging_init()
     MAP_SECTION(__text_start, __text_end, 0);
     MAP_SECTION(__rodata_start, __rodata_end, PTE_NX);
     MAP_SECTION(__data_start, __data_end, PTE_RW | PTE_NX);
+
+    uint64_t fb_vaddr = (uint64_t)moose_fb->address;
+    uint64_t fb_size = ALIGN_UP(moose_fb->pitch * moose_fb->height, PAGE_SIZE);
+
+    for (uint64_t i = 0; i < fb_size; i += PAGE_SIZE)
+    {
+        uint64_t vaddr = fb_vaddr + i;
+        uint64_t paddr = vaddr - kernel_virt + kernel_phys;
+        map_page(PHYS_TO_VIRT(kernel_ptable), vaddr, paddr, PTE_RW | PTE_NX);
+    }
+
     ptable_t *new_pml4 = (ptable_t *)PHYS_TO_VIRT((uint64_t)kernel_ptable);
     ptable_t *boot_pml4 = (ptable_t *)PHYS_TO_VIRT(read_cr3());
 
     for (int i = 256; i < 512; i++)
         new_pml4->entries[i] = boot_pml4->entries[i];
 
-    klog("paging", "kernel sections mapped:");
-    klog("paging", "  .limine_requests 0x%llx - 0x%llx (RO NX)", (uint64_t)__limine_requests_start, (uint64_t)__limine_requests_end);
-    klog("paging", "  .text            0x%llx - 0x%llx (RX)",
-         (uint64_t)__text_start, (uint64_t)__text_end);
-    klog("paging", "  .rodata          0x%llx - 0x%llx (RO NX)",
-         (uint64_t)__rodata_start, (uint64_t)__rodata_end);
-    klog("paging", "  .data+.bss       0x%llx - 0x%llx (RW NX)",
-         (uint64_t)__data_start, (uint64_t)__data_end);
+    klog("paging", "mappings:");
+    klog("paging", "  limine_requests: 0x%llx -> 0x%llx [RO NX]", (uint64_t)__limine_requests_start, (uint64_t)__limine_requests_end);
+    klog("paging", "  text:            0x%llx -> 0x%llx [RX]", (uint64_t)__text_start, (uint64_t)__text_end);
+    klog("paging", "  rodata:          0x%llx -> 0x%llx [RO NX]", (uint64_t)__rodata_start, (uint64_t)__rodata_end);
+    klog("paging", "  data/bss:        0x%llx -> 0x%llx [RW NX]", (uint64_t)__data_start, (uint64_t)__data_end);
+    klog("paging", "  framebuffer:     0x%llx -> 0x%llx [RW NX]", fb_vaddr, fb_vaddr + fb_size);
     ptable_load(kernel_ptable);
 }
