@@ -38,11 +38,11 @@ static void cpio_strip_prefix(char *name)
     }
 }
 
-static int cpio_do_file(struct vfs_inode *root, const char *path,
+static int cpio_do_file(inode_t *root, const char *path,
                         const void *data, unsigned int filesize)
 {
     char parent[256], name[256];
-    struct vfs_inode *dir, *file;
+    inode_t *dir, *file;
     const char *slash;
     int err;
 
@@ -93,7 +93,7 @@ static int cpio_do_file(struct vfs_inode *root, const char *path,
     return 0;
 }
 
-int cpio_archive_extract(struct vfs_inode *root, void *buf, size_t len)
+int cpio_archive_extract(inode_t *root, void *buf, size_t len)
 {
     uint8_t *p = buf;
     uint8_t *end = p + len;

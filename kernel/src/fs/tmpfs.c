@@ -10,37 +10,37 @@
 struct tmpfs_dirent
 {
     char name[256];
-    struct vfs_inode *inode;
+    inode_t *inode;
     struct tmpfs_dirent *next;
 };
 
 /* inode ops */
-static struct vfs_inode *tmpfs_lookup(struct vfs_inode *dir, const char *name);
-static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode);
-static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode, struct vfs_inode **out);
+static inode_t *tmpfs_lookup(inode_t *dir, const char *name);
+static int tmpfs_mkdir(inode_t *dir, const char *name, mode_t mode);
+static int tmpfs_create(inode_t *dir, const char *name, mode_t mode, inode_t **out);
 
 /* file ops */
-static int tmpfs_open(struct vfs_inode *inode, struct vfs_file *file);
-static int tmpfs_release(struct vfs_inode *inode, struct vfs_file *file);
-static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count, loff_t *pos);
-static ssize_t tmpfs_write(struct vfs_file *file, const void *buf, size_t count, loff_t *pos);
-static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent, loff_t *pos);
-static loff_t tmpfs_llseek(struct vfs_file *file, loff_t offset, int whence);
+static int tmpfs_open(inode_t *inode, file_t *file);
+static int tmpfs_release(inode_t *inode, file_t *file);
+static ssize_t tmpfs_read(file_t *file, void *buf, size_t count, loff_t *pos);
+static ssize_t tmpfs_write(file_t *file, const void *buf, size_t count, loff_t *pos);
+static int tmpfs_readdir(file_t *file, dirent_t *dirent, loff_t *pos);
+static loff_t tmpfs_llseek(file_t *file, loff_t offset, int whence);
 
-static const struct vfs_inode_ops tmpfs_dir_iops = {
+static const inode_ops_t tmpfs_dir_iops = {
     .lookup = tmpfs_lookup,
     .mkdir = tmpfs_mkdir,
     .create = tmpfs_create,
 };
 
-static const struct vfs_file_ops tmpfs_dir_fops = {
+static const file_ops_t tmpfs_dir_fops = {
     .open = tmpfs_open,
     .release = tmpfs_release,
     .readdir = tmpfs_readdir,
     .llseek = tmpfs_llseek,
 };
 
-static const struct vfs_file_ops tmpfs_reg_fops = {
+static const file_ops_t tmpfs_reg_fops = {
     .open = tmpfs_open,
     .release = tmpfs_release,
     .read = tmpfs_read,
@@ -48,9 +48,9 @@ static const struct vfs_file_ops tmpfs_reg_fops = {
     .llseek = tmpfs_llseek,
 };
 
-static struct vfs_inode *tmpfs_alloc_inode(struct vfs_superblock *sb, mode_t mode)
+static inode_t *tmpfs_alloc_inode(superblock_t *sb, mode_t mode)
 {
-    struct vfs_inode *inode = kmalloc(sizeof(struct vfs_inode));
+    inode_t *inode = kmalloc(sizeof(inode_t));
     if (!inode)
         return NULL;
 
@@ -81,7 +81,7 @@ static struct vfs_inode *tmpfs_alloc_inode(struct vfs_superblock *sb, mode_t mod
     return inode;
 }
 
-static int tmpfs_add_dirent(struct vfs_inode *dir, const char *name, struct vfs_inode *child)
+static int tmpfs_add_dirent(inode_t *dir, const char *name, inode_t *child)
 {
     struct tmpfs_dirent *ent;
 
@@ -102,7 +102,7 @@ static int tmpfs_add_dirent(struct vfs_inode *dir, const char *name, struct vfs_
     return 0;
 }
 
-static struct vfs_inode *tmpfs_lookup(struct vfs_inode *dir, const char *name)
+static inode_t *tmpfs_lookup(inode_t *dir, const char *name)
 {
     struct tmpfs_dirent *ent;
 
@@ -120,10 +120,10 @@ static struct vfs_inode *tmpfs_lookup(struct vfs_inode *dir, const char *name)
     return NULL;
 }
 
-static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode)
+static int tmpfs_mkdir(inode_t *dir, const char *name, mode_t mode)
 {
-    struct vfs_superblock *sb;
-    struct vfs_inode *child;
+    superblock_t *sb;
+    inode_t *child;
     int err;
 
     if (!S_ISDIR(dir->mode))
@@ -153,11 +153,11 @@ static int tmpfs_mkdir(struct vfs_inode *dir, const char *name, mode_t mode)
     return 0;
 }
 
-static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode,
-                        struct vfs_inode **out)
+static int tmpfs_create(inode_t *dir, const char *name, mode_t mode,
+                        inode_t **out)
 {
-    struct vfs_superblock *sb;
-    struct vfs_inode *child;
+    superblock_t *sb;
+    inode_t *child;
     int err;
 
     if (!S_ISDIR(dir->mode))
@@ -185,23 +185,23 @@ static int tmpfs_create(struct vfs_inode *dir, const char *name, mode_t mode,
     return 0;
 }
 
-static int tmpfs_open(struct vfs_inode *inode, struct vfs_file *file)
+static int tmpfs_open(inode_t *inode, file_t *file)
 {
     (void)inode;
     (void)file;
     return 0;
 }
 
-static int tmpfs_release(struct vfs_inode *inode, struct vfs_file *file)
+static int tmpfs_release(inode_t *inode, file_t *file)
 {
     (void)inode;
     (void)file;
     return 0;
 }
 
-static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count, loff_t *pos)
+static ssize_t tmpfs_read(file_t *file, void *buf, size_t count, loff_t *pos)
 {
-    struct vfs_inode *inode = file->inode;
+    inode_t *inode = file->inode;
     size_t avail;
 
     if (!S_ISREG(inode->mode))
@@ -221,10 +221,10 @@ static ssize_t tmpfs_read(struct vfs_file *file, void *buf, size_t count, loff_t
     return count;
 }
 
-static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
+static ssize_t tmpfs_write(file_t *file, const void *buf,
                            size_t count, loff_t *pos)
 {
-    struct vfs_inode *inode = file->inode;
+    inode_t *inode = file->inode;
     void *new_data;
 
     if (!S_ISREG(inode->mode))
@@ -255,9 +255,9 @@ static ssize_t tmpfs_write(struct vfs_file *file, const void *buf,
     return count;
 }
 
-static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent, loff_t *pos)
+static int tmpfs_readdir(file_t *file, dirent_t *dirent, loff_t *pos)
 {
-    struct vfs_inode *inode = file->inode;
+    inode_t *inode = file->inode;
     struct tmpfs_dirent *ent;
     size_t i;
 
@@ -287,9 +287,9 @@ static int tmpfs_readdir(struct vfs_file *file, struct vfs_dirent *dirent, loff_
     return -1;
 }
 
-static loff_t tmpfs_llseek(struct vfs_file *file, loff_t offset, int whence)
+static loff_t tmpfs_llseek(file_t *file, loff_t offset, int whence)
 {
-    struct vfs_inode *inode = file->inode;
+    inode_t *inode = file->inode;
     loff_t new_pos;
 
     switch (whence)
@@ -314,16 +314,16 @@ static loff_t tmpfs_llseek(struct vfs_file *file, loff_t offset, int whence)
     return new_pos;
 }
 
-struct vfs_superblock *tmpfs_mount(void)
+superblock_t *tmpfs_mount(void)
 {
-    struct vfs_superblock *sb = kmalloc(sizeof(struct vfs_superblock));
+    superblock_t *sb = kmalloc(sizeof(superblock_t));
     if (!sb)
         return NULL;
 
     sb->s_ino_counter = 1;
     sb->private_data = NULL;
 
-    struct vfs_inode *root = tmpfs_alloc_inode(sb, S_IFDIR | 0755);
+    inode_t *root = tmpfs_alloc_inode(sb, S_IFDIR | 0755);
     if (!root)
     {
         kfree(sb);

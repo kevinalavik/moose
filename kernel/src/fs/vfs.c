@@ -5,16 +5,16 @@
 #include <stdint.h>
 #include <stddef.h>
 
-static struct vfs_mount *mount_list = NULL;
+static mount_t *mount_list = NULL;
 
 void vfs_init(void)
 {
     klog("vfs", "initialized");
 }
 
-struct vfs_superblock *vfs_mount_root(const char *path, struct vfs_superblock *sb)
+superblock_t *vfs_mount_root(const char *path, superblock_t *sb)
 {
-    struct vfs_mount *mnt = kmalloc(sizeof(struct vfs_mount));
+    mount_t *mnt = kmalloc(sizeof(mount_t));
     if (!mnt)
         return NULL;
 
@@ -34,7 +34,7 @@ struct vfs_superblock *vfs_mount_root(const char *path, struct vfs_superblock *s
         mount_list = mnt;
     else
     {
-        struct vfs_mount *last = mount_list;
+        mount_t *last = mount_list;
         while (last->next)
             last = last->next;
         last->next = mnt;
@@ -44,9 +44,9 @@ struct vfs_superblock *vfs_mount_root(const char *path, struct vfs_superblock *s
     return sb;
 }
 
-struct vfs_inode *vfs_resolve(struct vfs_inode *root, const char *path)
+inode_t *vfs_resolve(inode_t *root, const char *path)
 {
-    struct vfs_inode *cur = root;
+    inode_t *cur = root;
     const char *p = path;
     char component[256];
 
@@ -82,7 +82,7 @@ struct vfs_inode *vfs_resolve(struct vfs_inode *root, const char *path)
     return cur;
 }
 
-struct vfs_inode *vfs_lookup(struct vfs_inode *parent, const char *name)
+inode_t *vfs_lookup(inode_t *parent, const char *name)
 {
     if (!parent || !name || !parent->i_ops || !parent->i_ops->lookup)
         return NULL;
@@ -90,7 +90,7 @@ struct vfs_inode *vfs_lookup(struct vfs_inode *parent, const char *name)
     return parent->i_ops->lookup(parent, name);
 }
 
-int vfs_mkdir(struct vfs_inode *parent, const char *name, mode_t mode)
+int vfs_mkdir(inode_t *parent, const char *name, mode_t mode)
 {
     if (!parent || !name || !parent->i_ops || !parent->i_ops->mkdir)
         return -1;
@@ -98,8 +98,8 @@ int vfs_mkdir(struct vfs_inode *parent, const char *name, mode_t mode)
     return parent->i_ops->mkdir(parent, name, mode);
 }
 
-int vfs_create(struct vfs_inode *parent, const char *name, mode_t mode,
-               struct vfs_inode **out)
+int vfs_create(inode_t *parent, const char *name, mode_t mode,
+               inode_t **out)
 {
     if (!parent || !name || !parent->i_ops || !parent->i_ops->create)
         return -1;
@@ -107,10 +107,10 @@ int vfs_create(struct vfs_inode *parent, const char *name, mode_t mode,
     return parent->i_ops->create(parent, name, mode, out);
 }
 
-int vfs_mkdir_p(struct vfs_inode *root, const char *path, mode_t mode)
+int vfs_mkdir_p(inode_t *root, const char *path, mode_t mode)
 {
-    struct vfs_inode *cur;
-    struct vfs_inode *existing;
+    inode_t *cur;
+    inode_t *existing;
     char buf[256];
     (void)mode; /* todo: support mode */
 
@@ -175,9 +175,9 @@ int vfs_mkdir_p(struct vfs_inode *root, const char *path, mode_t mode)
     return 0;
 }
 
-struct vfs_file *vfs_open(const char *path, int flags)
+file_t *vfs_open(const char *path, int flags)
 {
-    struct vfs_inode *inode;
+    inode_t *inode;
 
     if (!mount_list)
         return NULL;
@@ -190,7 +190,7 @@ struct vfs_file *vfs_open(const char *path, int flags)
     if (!inode)
         return NULL;
 
-    struct vfs_file *file = kmalloc(sizeof(struct vfs_file));
+    file_t *file = kmalloc(sizeof(file_t));
     if (!file)
         return NULL;
 
@@ -205,7 +205,7 @@ struct vfs_file *vfs_open(const char *path, int flags)
     return file;
 }
 
-void vfs_close(struct vfs_file *file)
+void vfs_close(file_t *file)
 {
     if (!file)
         return;
@@ -216,7 +216,7 @@ void vfs_close(struct vfs_file *file)
     kfree(file);
 }
 
-ssize_t vfs_file_read(struct vfs_file *file, void *buf, size_t count)
+ssize_t vfs_file_read(file_t *file, void *buf, size_t count)
 {
     if (!file || !buf || !file->f_op || !file->f_op->read)
         return -1;
@@ -224,7 +224,7 @@ ssize_t vfs_file_read(struct vfs_file *file, void *buf, size_t count)
     return file->f_op->read(file, buf, count, &file->pos);
 }
 
-ssize_t vfs_file_write(struct vfs_file *file, const void *buf, size_t count)
+ssize_t vfs_file_write(file_t *file, const void *buf, size_t count)
 {
     if (!file || !buf || !file->f_op || !file->f_op->write)
         return -1;
@@ -232,7 +232,7 @@ ssize_t vfs_file_write(struct vfs_file *file, const void *buf, size_t count)
     return file->f_op->write(file, buf, count, &file->pos);
 }
 
-int vfs_file_readdir(struct vfs_file *file, struct vfs_dirent *dirent)
+int vfs_file_readdir(file_t *file, dirent_t *dirent)
 {
     if (!file || !dirent || !file->f_op || !file->f_op->readdir)
         return -1;
@@ -240,7 +240,7 @@ int vfs_file_readdir(struct vfs_file *file, struct vfs_dirent *dirent)
     return file->f_op->readdir(file, dirent, &file->pos);
 }
 
-loff_t vfs_llseek(struct vfs_file *file, loff_t offset, int whence)
+loff_t vfs_llseek(file_t *file, loff_t offset, int whence)
 {
     if (!file || !file->f_op || !file->f_op->llseek)
         return -1;
@@ -248,13 +248,13 @@ loff_t vfs_llseek(struct vfs_file *file, loff_t offset, int whence)
     return file->f_op->llseek(file, offset, whence);
 }
 
-ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count,
+ssize_t vfs_read(inode_t *inode, void *buf, size_t count,
                  off_t offset)
 {
     if (!inode || !inode->f_ops || !inode->f_ops->read)
         return -1;
 
-    struct vfs_file tmp;
+    file_t tmp;
 
     tmp.inode = inode;
     tmp.f_op = inode->f_ops;
@@ -265,13 +265,13 @@ ssize_t vfs_read(struct vfs_inode *inode, void *buf, size_t count,
     return inode->f_ops->read(&tmp, buf, count, &pos);
 }
 
-ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count,
+ssize_t vfs_write(inode_t *inode, const void *buf, size_t count,
                   off_t offset)
 {
     if (!inode || !inode->f_ops || !inode->f_ops->write)
         return -1;
 
-    struct vfs_file tmp;
+    file_t tmp;
 
     tmp.inode = inode;
     tmp.f_op = inode->f_ops;
@@ -282,14 +282,14 @@ ssize_t vfs_write(struct vfs_inode *inode, const void *buf, size_t count,
     return inode->f_ops->write(&tmp, buf, count, &pos);
 }
 
-int vfs_readdir(struct vfs_inode *inode, struct vfs_dirent *dirent,
+int vfs_readdir(inode_t *inode, dirent_t *dirent,
                 size_t *pos)
 {
     if (!inode || !dirent || !pos ||
         !inode->f_ops || !inode->f_ops->readdir)
         return -1;
 
-    struct vfs_file tmp;
+    file_t tmp;
 
     tmp.inode = inode;
     tmp.f_op = inode->f_ops;

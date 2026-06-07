@@ -25,6 +25,6 @@ typedef struct
     char c_check[8];
 } cpio_header_t;
 
-int cpio_archive_extract(struct vfs_inode *root, void *buf, size_t len);
+int cpio_archive_extract(inode_t *root, void *buf, size_t len);
 
 #endif /* FS_CPIO_H */

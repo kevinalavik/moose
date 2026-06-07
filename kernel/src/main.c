@@ -165,7 +165,7 @@ void kmain(void)
     vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
     current_vctx = &kernel_vctx; /* todo: when we got scheduler we actually store this in the pcb */
     vfs_init();
-    struct vfs_superblock *sb = tmpfs_mount();
+    superblock_t *sb = tmpfs_mount();
     if (sb)
     {
         vfs_mount_root("/", sb);
@@ -179,7 +179,7 @@ void kmain(void)
 
     kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
 
-    struct vfs_file *f = vfs_open("/test.txt", O_RDONLY);
+    file_t *f = vfs_open("/test.txt", O_RDONLY);
     if (f)
     {
         char buf[256];
