@@ -25,23 +25,17 @@
 #define COL_TEAL "\x1b[1;36m"
 #define COL_BRIGHT "\x1b[1;37m"
 
-typedef enum
-{
-    ANSI_NORMAL,
-    ANSI_PENDING,
-    ANSI_READY
-} ansi_result_t;
+typedef enum { ANSI_NORMAL, ANSI_PENDING, ANSI_READY } ansi_result_t;
 
-typedef struct ansi_parser
-{
-    int state;
-    char final;
-    bool simple;
-    bool private;
-    int params[ANSI_PARAM_CAP];
-    uint32_t param_count;
-    uint32_t value;
-    bool have_value;
+typedef struct ansi_parser {
+	int state;
+	char final;
+	bool simple;
+	bool private;
+	int params[ANSI_PARAM_CAP];
+	uint32_t param_count;
+	uint32_t value;
+	bool have_value;
 } ansi_parser_t;
 
 void ansi_init(ansi_parser_t *p);

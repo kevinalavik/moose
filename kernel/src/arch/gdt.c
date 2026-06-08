@@ -2,16 +2,16 @@
 #include <sys/klog.h>
 #include <dev/tty.h>
 
-#define GDT_ENTRY(seg_base, seg_limit, access_byte, flags_byte) \
-    {                                                           \
-        .limit_low = (uint16_t)((seg_limit) & 0xFFFFu),         \
-        .base_low = (uint16_t)((seg_base) & 0xFFFFu),           \
-        .base_mid = (uint8_t)(((seg_base) >> 16) & 0xFFu),      \
-        .access = (uint8_t)(access_byte),                       \
-        .limit = (uint8_t)(((seg_limit) >> 16) & 0x0Fu),        \
-        .flags = (uint8_t)(((flags_byte) >> 4) & 0x0Fu),        \
-        .base_high = (uint8_t)(((seg_base) >> 24) & 0xFFu),     \
-    }
+#define GDT_ENTRY(seg_base, seg_limit, access_byte, flags_byte)     \
+	{                                                           \
+		.limit_low = (uint16_t)((seg_limit) & 0xFFFFu),     \
+		.base_low = (uint16_t)((seg_base) & 0xFFFFu),       \
+		.base_mid = (uint8_t)(((seg_base) >> 16) & 0xFFu),  \
+		.access = (uint8_t)(access_byte),                   \
+		.limit = (uint8_t)(((seg_limit) >> 16) & 0x0Fu),    \
+		.flags = (uint8_t)(((flags_byte) >> 4) & 0x0Fu),    \
+		.base_high = (uint8_t)(((seg_base) >> 24) & 0xFFu), \
+	}
 
 static gdt_t kernel_gdt = {
     .entries = {
@@ -32,28 +32,27 @@ static gdt_t kernel_gdt = {
 };
 
 static gdt_r kernel_gdtr = {
-    .base = (uintptr_t)&kernel_gdt,
-    .size = sizeof(kernel_gdt.entries) - 1,
+	.base = (uintptr_t)&kernel_gdt,
+	.size = sizeof(kernel_gdt.entries) - 1,
 };
 
 void gdt_init()
 {
-    __asm__ volatile(
-        "lgdt %[gdtr]\n"
-        "pushq %[csel]\n"
-        "leaq 1f(%%rip), %%rax\n"
-        "pushq %%rax\n"
-        "lretq\n"
-        "1:\n"
-        "movw %[dsel], %%ax\n"
-        "movw %%ax, %%ds\n"
-        "movw %%ax, %%es\n"
-        "movw %%ax, %%ss\n"
-        "movw %%ax, %%fs\n"
-        "movw %%ax, %%gs\n"
-        :
-        : [gdtr] "m"(kernel_gdtr), [csel] "i"(GDT_KCODE_SEL),
-          [dsel] "i"(GDT_KDATA_SEL)
-        : "rax", "memory");
-    klog("gdt", "loaded kernel gdt @ %p", &kernel_gdtr);
+	__asm__ volatile("lgdt %[gdtr]\n"
+			 "pushq %[csel]\n"
+			 "leaq 1f(%%rip), %%rax\n"
+			 "pushq %%rax\n"
+			 "lretq\n"
+			 "1:\n"
+			 "movw %[dsel], %%ax\n"
+			 "movw %%ax, %%ds\n"
+			 "movw %%ax, %%es\n"
+			 "movw %%ax, %%ss\n"
+			 "movw %%ax, %%fs\n"
+			 "movw %%ax, %%gs\n"
+			 :
+			 : [gdtr] "m"(kernel_gdtr), [csel] "i"(GDT_KCODE_SEL),
+			   [dsel] "i"(GDT_KDATA_SEL)
+			 : "rax", "memory");
+	klog("gdt", "loaded kernel gdt @ %p", &kernel_gdtr);
 }

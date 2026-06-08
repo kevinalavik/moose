@@ -10,15 +10,14 @@
 #define MAY_WRITE 2
 #define MAY_READ 4
 
-typedef struct cred
-{
-    uid_t uid;
-    gid_t gid;
-    uid_t euid;
-    gid_t egid;
+typedef struct cred {
+	uid_t uid;
+	gid_t gid;
+	uid_t euid;
+	gid_t egid;
 
-    unsigned int ngroups;
-    gid_t groups[CRED_NGROUPS_MAX];
+	unsigned int ngroups;
+	gid_t groups[CRED_NGROUPS_MAX];
 } cred_t;
 
 extern cred_t kernel_cred;
@@ -30,7 +29,7 @@ int vfs_permission(const struct inode *inode, int mask);
 
 static inline int cred_is_root(void)
 {
-    return current_cred->euid == 0;
+	return current_cred->euid == 0;
 }
 
 #endif /* SYS_CRED_H */

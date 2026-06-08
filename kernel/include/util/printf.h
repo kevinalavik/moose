@@ -8,7 +8,8 @@
 #define PRINTF_PREFIX(f) k##f
 
 int PRINTF_PREFIX(vprintf)(const char *fmt, va_list vlist);
-int PRINTF_PREFIX(vsnprintf)(char *buf, size_t size, const char *fmt, va_list args);
+int PRINTF_PREFIX(vsnprintf)(char *buf, size_t size, const char *fmt,
+			     va_list args);
 int PRINTF_PREFIX(snprintf)(char *buffer, size_t size, const char *fmt, ...);
 int PRINTF_PREFIX(printf)(const char *fmt, ...);
 

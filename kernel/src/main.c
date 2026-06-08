@@ -23,44 +23,63 @@
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
 
-__attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
-    LIMINE_REQUESTS_START_MARKER;
+__attribute__((used,
+	       section(".limine_requests_start"))) static volatile uint64_t
+	limine_requests_start_marker[] = LIMINE_REQUESTS_START_MARKER;
 
-__attribute__((used, section(".limine_requests"))) static volatile uint64_t limine_base_revision[] =
-    LIMINE_BASE_REVISION(6);
+__attribute__((used, section(".limine_requests"))) static volatile uint64_t
+	limine_base_revision[] = LIMINE_BASE_REVISION(6);
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request framebuffer_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_framebuffer_request
+	framebuffer_request = {
+		.id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_rsdp_request rsdp_request = {
-    .id = LIMINE_RSDP_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_rsdp_request
+	rsdp_request = {
+		.id = LIMINE_RSDP_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_module_request module_request = {
-    .id = LIMINE_MODULE_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_module_request
+	module_request = {
+		.id = LIMINE_MODULE_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_memmap_request memmap_request = {
-    .id = LIMINE_MEMMAP_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_memmap_request
+	memmap_request = {
+		.id = LIMINE_MEMMAP_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_hhdm_request hhdm_request = {
-    .id = LIMINE_HHDM_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_hhdm_request
+	hhdm_request = {
+		.id = LIMINE_HHDM_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests"))) static volatile struct limine_executable_address_request kernel_file_request = {
-    .id = LIMINE_EXECUTABLE_FILE_REQUEST_ID,
-    .revision = 0,
-};
+__attribute__((
+	used,
+	section(".limine_requests"))) static volatile struct limine_executable_address_request
+	kernel_file_request = {
+		.id = LIMINE_EXECUTABLE_FILE_REQUEST_ID,
+		.revision = 0,
+	};
 
-__attribute__((used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =
-    LIMINE_REQUESTS_END_MARKER;
+__attribute__((used, section(".limine_requests_end"))) static volatile uint64_t
+	limine_requests_end_marker[] = LIMINE_REQUESTS_END_MARKER;
 
 struct limine_framebuffer *moose_fb = NULL;
 struct limine_memmap_response *moose_memmap = NULL;
@@ -74,182 +93,175 @@ handle_t tty0;
 
 int putc(char ch)
 {
-    if (com1.dev)
-        device_write(&com1, &ch, 1);
-    if (tty0.dev)
-        device_write(&tty0, &ch, 1);
-    return 1;
+	if (com1.dev)
+		device_write(&com1, &ch, 1);
+	if (tty0.dev)
+		device_write(&tty0, &ch, 1);
+	return 1;
 }
 
 int acpi_init(void)
 {
-    uacpi_status ret = uacpi_initialize(0);
-    if (uacpi_unlikely_error(ret))
-    {
-        klog("uACPI", COL_BRED "uacpi_initialize error: %s" COL_RESET, uacpi_status_to_string(ret));
-        return -ENODEV;
-    }
+	uacpi_status ret = uacpi_initialize(0);
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI", COL_BRED "uacpi_initialize error: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -ENODEV;
+	}
 
-    ret = uacpi_namespace_load();
-    if (uacpi_unlikely_error(ret))
-    {
-        klog("uACPI", COL_BRED "uacpi_namespace_load error: %s" COL_RESET, uacpi_status_to_string(ret));
-        return -ENODEV;
-    }
+	ret = uacpi_namespace_load();
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI",
+		     COL_BRED "uacpi_namespace_load error: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -ENODEV;
+	}
 
-    ret = uacpi_namespace_initialize();
-    if (uacpi_unlikely_error(ret))
-    {
-        klog("uACPI", COL_BRED "uacpi_namespace_initialize error: %s" COL_RESET, uacpi_status_to_string(ret));
-        return -ENODEV;
-    }
+	ret = uacpi_namespace_initialize();
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI",
+		     COL_BRED "uacpi_namespace_initialize error: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -ENODEV;
+	}
 
-    ret = uacpi_finalize_gpe_initialization();
-    if (uacpi_unlikely_error(ret))
-    {
-        klog("uACPI", COL_BRED "GPE initialization error: %s" COL_RESET, uacpi_status_to_string(ret));
-        return -ENODEV;
-    }
-    return 0;
+	ret = uacpi_finalize_gpe_initialization();
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI", COL_BRED "GPE initialization error: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -ENODEV;
+	}
+	return 0;
 }
 
 void kmain(void)
 {
-    struct limine_file *initrd = NULL;
+	struct limine_file *initrd = NULL;
 
-    if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
-        hcf();
+	if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
+		hcf();
 
-    com1 = uart_init(COM1);
-    if (com1.dev == NULL)
-        klog("moose", COL_AMBER "failed to open COM1 device handle" COL_RESET);
+	com1 = uart_init(COM1);
+	if (com1.dev == NULL)
+		klog("moose",
+		     COL_AMBER "failed to open COM1 device handle" COL_RESET);
 
-    if (!framebuffer_request.response ||
-        framebuffer_request.response->framebuffer_count < 1)
-    {
-        klog("moose", COL_BRED "failed to get framebuffer" COL_RESET);
-        hcf();
-    }
+	if (!framebuffer_request.response ||
+	    framebuffer_request.response->framebuffer_count < 1) {
+		klog("moose", COL_BRED "failed to get framebuffer" COL_RESET);
+		hcf();
+	}
 
-    if (!module_request.response)
-        klog("moose", COL_AMBER "no kernel modules present" COL_RESET);
+	if (!module_request.response)
+		klog("moose", COL_AMBER "no kernel modules present" COL_RESET);
 
-    moose_fb = framebuffer_request.response->framebuffers[0];
-    if (!moose_fb || !moose_fb->address)
-    {
-        klog("moose", COL_BRED "invalid framebuffer" COL_RESET);
-        hcf();
-    }
+	moose_fb = framebuffer_request.response->framebuffers[0];
+	if (!moose_fb || !moose_fb->address) {
+		klog("moose", COL_BRED "invalid framebuffer" COL_RESET);
+		hcf();
+	}
 
-    if (moose_fb->bpp < 8 || moose_fb->bpp % 8 != 0)
-    {
-        klog("moose", COL_BRED "unsupported framebuffer bpp: %d" COL_RESET,
-             moose_fb->bpp);
-        hcf();
-    }
+	if (moose_fb->bpp < 8 || moose_fb->bpp % 8 != 0) {
+		klog("moose",
+		     COL_BRED "unsupported framebuffer bpp: %d" COL_RESET,
+		     moose_fb->bpp);
+		hcf();
+	}
 
-    tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
-    klog("moose", "using %s", device_label(&tty0));
-    tsc_init();
+	tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
+	klog("moose", "using %s", device_label(&tty0));
+	tsc_init();
 
-    cred_init();
+	cred_init();
 
-    gdt_init();
-    idt_init();
+	gdt_init();
+	idt_init();
 
-    if (!memmap_request.response)
-    {
-        klog("moose", COL_BRED "failed to get memory map" COL_RESET);
-        hcf();
-    }
-    moose_memmap = memmap_request.response;
+	if (!memmap_request.response) {
+		klog("moose", COL_BRED "failed to get memory map" COL_RESET);
+		hcf();
+	}
+	moose_memmap = memmap_request.response;
 
-    if (!hhdm_request.response)
-    {
-        klog("moose", COL_BRED "failed to get hhdm offset" COL_RESET);
-        hcf();
-    }
-    moose_hhdm_off = hhdm_request.response->offset;
+	if (!hhdm_request.response) {
+		klog("moose", COL_BRED "failed to get hhdm offset" COL_RESET);
+		hcf();
+	}
+	moose_hhdm_off = hhdm_request.response->offset;
 
-    if (rsdp_request.response)
-    {
-        uint64_t rsdp_hhdm = (uint64_t)rsdp_request.response->address;
-        moose_rsdp = rsdp_hhdm - moose_hhdm_off;
-    }
+	if (rsdp_request.response) {
+		uint64_t rsdp_hhdm = (uint64_t)rsdp_request.response->address;
+		moose_rsdp = rsdp_hhdm - moose_hhdm_off;
+	}
 
-    pmm_init();
+	pmm_init();
 
-    {
-        uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
-        klog("moose", "allocate single page @ %p", a);
-        pmm_ref(a);
-        *a = 42;
-        klog("moose", "wrote \"%d\" to %p", *a, a);
-        pmm_unref(a);
-        pmm_free(a);
-    }
+	{
+		uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
+		klog("moose", "allocate single page @ %p", a);
+		pmm_ref(a);
+		*a = 42;
+		klog("moose", "wrote \"%d\" to %p", *a, a);
+		pmm_unref(a);
+		pmm_free(a);
+	}
 
-    if (module_request.response)
-    {
-        klog("moose", "module list:");
-        for (uint64_t i = 0; i < module_request.response->module_count; i++)
-        {
-            struct limine_file *mod = module_request.response->modules[i];
-            klog("moose", "  [%d] %s: %d bytes", i, mod->path, mod->size);
-            if (strcmp(mod->path, "/boot/initrd.cpio") == 0)
-                initrd = mod;
-        }
-    }
+	if (module_request.response) {
+		klog("moose", "module list:");
+		for (uint64_t i = 0; i < module_request.response->module_count;
+		     i++) {
+			struct limine_file *mod =
+				module_request.response->modules[i];
+			klog("moose", "  [%d] %s: %d bytes", i, mod->path,
+			     mod->size);
+			if (strcmp(mod->path, "/boot/initrd.cpio") == 0)
+				initrd = mod;
+		}
+	}
 
-    if (!kernel_file_request.response)
-    {
-        klog("moose", COL_BRED "failed to get kernel info" COL_RESET);
-        hcf();
-    }
-    kernel_virt = kernel_file_request.response->virtual_base;
-    kernel_phys = kernel_file_request.response->physical_base;
-    paging_init();
+	if (!kernel_file_request.response) {
+		klog("moose", COL_BRED "failed to get kernel info" COL_RESET);
+		hcf();
+	}
+	kernel_virt = kernel_file_request.response->virtual_base;
+	kernel_phys = kernel_file_request.response->physical_base;
+	paging_init();
 
-    static vctx_t kernel_vctx;
-    vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
-    current_vctx = &kernel_vctx;
+	static vctx_t kernel_vctx;
+	vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
+	current_vctx = &kernel_vctx;
 
-    acpi_init();
+	acpi_init();
 
-    superblock_t *sb = tmpfs_mount();
-    if (!sb)
-    {
-        klog("moose", COL_BRED "failed to mount root tmpfs" COL_RESET);
-        hcf();
-    }
-    vfs_mount("/", sb);
+	superblock_t *sb = tmpfs_mount();
+	if (!sb) {
+		klog("moose", COL_BRED "failed to mount root tmpfs" COL_RESET);
+		hcf();
+	}
+	vfs_mount("/", sb);
 
-    if (initrd)
-    {
-        klog("moose", "found initrd @ %s", initrd->path);
-        cpio_archive_extract(sb->s_root, initrd->address, initrd->size);
-    }
+	if (initrd) {
+		klog("moose", "found initrd @ %s", initrd->path);
+		cpio_archive_extract(sb->s_root, initrd->address, initrd->size);
+	}
 
-    vfs_mkdir_p(sb->s_root, "dev", S_IFDIR | 0755);
-    devfs_init();
+	vfs_mkdir_p(sb->s_root, "dev", S_IFDIR | 0755);
+	devfs_init();
 
-    if (device_handle_valid(&com1))
-        devfs_register("ttyS0", &com1);
-    if (device_handle_valid(&tty0))
-        devfs_register("tty0", &tty0);
+	if (device_handle_valid(&com1))
+		devfs_register("ttyS0", &com1);
+	if (device_handle_valid(&tty0))
+		devfs_register("tty0", &tty0);
 
-    kprintf("moose kernel v0.1.0\n");
+	kprintf("moose kernel v0.1.0\n");
 
-    file_t *out = vfs_open("/dev/tty0", O_WRONLY);
-    if (!out)
-    {
-        klog("moose", COL_BRED "failed to open /dev/tty0" COL_RESET);
-    }
-    else
-    {
-        const char *msg = "Hello via VFS!\n";
-        vfs_write(out, msg, strlen(msg));
-    }
+	file_t *out = vfs_open("/dev/tty0", O_WRONLY);
+	if (!out) {
+		klog("moose", COL_BRED "failed to open /dev/tty0" COL_RESET);
+	} else {
+		const char *msg = "Hello via VFS!\n";
+		vfs_write(out, msg, strlen(msg));
+	}
 
-    hlt();
+	hlt();
 }

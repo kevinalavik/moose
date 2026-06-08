@@ -56,80 +56,75 @@ typedef struct dirent dirent_t;
 typedef struct file file_t;
 typedef struct stat stat_t;
 
-struct stat
-{
-    ino_t st_ino;
-    mode_t st_mode;
-    uid_t st_uid;
-    gid_t st_gid;
-    uint64_t st_nlink;
-    uint64_t st_size;
-    dev_t st_rdev;
+struct stat {
+	ino_t st_ino;
+	mode_t st_mode;
+	uid_t st_uid;
+	gid_t st_gid;
+	uint64_t st_nlink;
+	uint64_t st_size;
+	dev_t st_rdev;
 };
 
-typedef struct inode_ops
-{
-    inode_t *(*lookup)(inode_t *dir, const char *name);
-    int (*mkdir)(inode_t *dir, const char *name, mode_t mode);
-    int (*create)(inode_t *dir, const char *name, mode_t mode, inode_t **out);
-    int (*getattr)(inode_t *inode, stat_t *stat);
-    int (*mknod)(inode_t *dir, const char *name, mode_t mode, dev_t rdev, inode_t **out);
+typedef struct inode_ops {
+	inode_t *(*lookup)(inode_t *dir, const char *name);
+	int (*mkdir)(inode_t *dir, const char *name, mode_t mode);
+	int (*create)(inode_t *dir, const char *name, mode_t mode,
+		      inode_t **out);
+	int (*getattr)(inode_t *inode, stat_t *stat);
+	int (*mknod)(inode_t *dir, const char *name, mode_t mode, dev_t rdev,
+		     inode_t **out);
 } inode_ops_t;
 
-typedef struct file_ops
-{
-    int (*open)(inode_t *inode, file_t *file);
-    int (*release)(inode_t *inode, file_t *file);
-    ssize_t (*read)(file_t *file, void *buf, size_t count, loff_t *pos);
-    ssize_t (*write)(file_t *file, const void *buf, size_t count, loff_t *pos);
-    int (*readdir)(file_t *file, dirent_t *dirent, loff_t *pos);
-    loff_t (*llseek)(file_t *file, loff_t offset, int whence);
+typedef struct file_ops {
+	int (*open)(inode_t *inode, file_t *file);
+	int (*release)(inode_t *inode, file_t *file);
+	ssize_t (*read)(file_t *file, void *buf, size_t count, loff_t *pos);
+	ssize_t (*write)(file_t *file, const void *buf, size_t count,
+			 loff_t *pos);
+	int (*readdir)(file_t *file, dirent_t *dirent, loff_t *pos);
+	loff_t (*llseek)(file_t *file, loff_t offset, int whence);
 } file_ops_t;
 
-struct inode
-{
-    ino_t i_ino;
-    mode_t i_mode;
-    uid_t i_uid;
-    gid_t i_gid;
-    uint64_t i_size;
-    uint64_t i_nlink;
-    dev_t i_rdev;
-    superblock_t *i_sb;
-    const inode_ops_t *i_ops;
-    const file_ops_t *i_fop;
-    struct inode *i_parent;
-    void *i_private;
+struct inode {
+	ino_t i_ino;
+	mode_t i_mode;
+	uid_t i_uid;
+	gid_t i_gid;
+	uint64_t i_size;
+	uint64_t i_nlink;
+	dev_t i_rdev;
+	superblock_t *i_sb;
+	const inode_ops_t *i_ops;
+	const file_ops_t *i_fop;
+	struct inode *i_parent;
+	void *i_private;
 };
 
-struct superblock
-{
-    ino_t s_ino_next;
-    inode_t *s_root;
-    void *s_private;
+struct superblock {
+	ino_t s_ino_next;
+	inode_t *s_root;
+	void *s_private;
 };
 
-struct dirent
-{
-    ino_t d_ino;
-    uint8_t d_type;
-    char d_name[VFS_NAME_MAX + 1];
+struct dirent {
+	ino_t d_ino;
+	uint8_t d_type;
+	char d_name[VFS_NAME_MAX + 1];
 };
 
-struct mount
-{
-    superblock_t *mnt_sb;
-    inode_t *mnt_root;
-    mount_t *mnt_next;
-    char *mnt_path;
+struct mount {
+	superblock_t *mnt_sb;
+	inode_t *mnt_root;
+	mount_t *mnt_next;
+	char *mnt_path;
 };
 
-struct file
-{
-    inode_t *f_inode;
-    const file_ops_t *f_op;
-    loff_t f_pos;
-    int f_flags;
+struct file {
+	inode_t *f_inode;
+	const file_ops_t *f_op;
+	loff_t f_pos;
+	int f_flags;
 };
 
 superblock_t *vfs_mount(const char *path, superblock_t *sb);
@@ -138,7 +133,8 @@ inode_t *vfs_lookup(inode_t *parent, const char *name);
 inode_t *vfs_inode(const char *path);
 int vfs_mkdir(inode_t *parent, const char *name, mode_t mode);
 int vfs_mkdir_p(inode_t *root, const char *path, mode_t mode);
-int vfs_mknod(inode_t *parent, const char *name, mode_t mode, dev_t rdev, inode_t **out);
+int vfs_mknod(inode_t *parent, const char *name, mode_t mode, dev_t rdev,
+	      inode_t **out);
 int vfs_create(inode_t *parent, const char *name, mode_t mode, inode_t **out);
 file_t *vfs_open(const char *path, int flags);
 void vfs_close(file_t *file);
@@ -153,23 +149,22 @@ int vfs_chown(const char *path, uid_t uid, gid_t gid);
 
 static inline uint8_t vfs_mode_to_dtype(mode_t mode)
 {
-    switch (mode & S_IFMT)
-    {
-    case S_IFREG:
-        return DT_REG;
-    case S_IFDIR:
-        return DT_DIR;
-    case S_IFCHR:
-        return DT_CHR;
-    case S_IFBLK:
-        return DT_BLK;
-    case S_IFLNK:
-        return DT_LNK;
-    case S_IFIFO:
-        return DT_FIFO;
-    default:
-        return DT_UNKNOWN;
-    }
+	switch (mode & S_IFMT) {
+	case S_IFREG:
+		return DT_REG;
+	case S_IFDIR:
+		return DT_DIR;
+	case S_IFCHR:
+		return DT_CHR;
+	case S_IFBLK:
+		return DT_BLK;
+	case S_IFLNK:
+		return DT_LNK;
+	case S_IFIFO:
+		return DT_FIFO;
+	default:
+		return DT_UNKNOWN;
+	}
 }
 
 #endif /* FS_VFS_H */

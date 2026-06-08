@@ -4,3 +4,4 @@
 *.hdd
 *.log
 *.cpio
+compile_commands*.json
