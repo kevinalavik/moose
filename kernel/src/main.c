@@ -74,136 +74,6 @@ int putc(char ch)
     return 1;
 }
 
-static void mode_str(mode_t mode, char out[11])
-{
-    out[0] = S_ISDIR(mode) ? 'd' : S_ISCHR(mode) ? 'c'
-                               : S_ISBLK(mode)   ? 'b'
-                               : S_ISLNK(mode)   ? 'l'
-                                                 : '-';
-    out[1] = (mode & S_IRUSR) ? 'r' : '-';
-    out[2] = (mode & S_IWUSR) ? 'w' : '-';
-    out[3] = (mode & S_IXUSR) ? 'x' : '-';
-    out[4] = (mode & S_IRGRP) ? 'r' : '-';
-    out[5] = (mode & S_IWGRP) ? 'w' : '-';
-    out[6] = (mode & S_IXGRP) ? 'x' : '-';
-    out[7] = (mode & S_IROTH) ? 'r' : '-';
-    out[8] = (mode & S_IWOTH) ? 'w' : '-';
-    out[9] = (mode & S_IXOTH) ? 'x' : '-';
-    out[10] = '\0';
-}
-
-static void fmt_size(uint64_t size, char out[8])
-{
-    const char *units = "BKMGT";
-    int u = 0;
-    uint64_t v = size;
-
-    while (v >= 1024 && u < 4)
-    {
-        v /= 1024;
-        u++;
-    }
-
-    if (u == 0)
-        ksnprintf(out, 8, "%lluB", (unsigned long long)v);
-    else
-        ksnprintf(out, 8, "%llu%c", (unsigned long long)v, units[u]);
-}
-
-#define LS_MAX_SUBDIRS 64
-
-static void ls_dir(const char *path, inode_t *dir, int depth)
-{
-    char perms[11];
-    char szstr[8];
-    dirent_t de;
-    stat_t st;
-    char indent[32];
-    int ind = depth * 2;
-
-    inode_t *subdirs[LS_MAX_SUBDIRS];
-    char subpaths[LS_MAX_SUBDIRS][VFS_PATH_MAX];
-    int nsubs = 0;
-
-    if (ind >= (int)sizeof(indent) - 1)
-        ind = (int)sizeof(indent) - 2;
-    for (int i = 0; i < ind; i++)
-        indent[i] = ' ';
-    indent[ind] = '\0';
-
-    file_t *f = kmalloc(sizeof(file_t));
-    if (!f)
-        return;
-    f->f_inode = dir;
-    f->f_op = dir->i_fop;
-    f->f_pos = 0;
-    f->f_flags = O_RDONLY;
-
-    while (f->f_op && f->f_op->readdir &&
-           f->f_op->readdir(f, &de, &f->f_pos) == 0)
-    {
-        if (strcmp(de.d_name, ".") == 0 || strcmp(de.d_name, "..") == 0)
-            continue;
-
-        char childpath[VFS_PATH_MAX];
-        ksnprintf(childpath, sizeof(childpath), "%s%s", path, de.d_name);
-
-        inode_t *child = vfs_inode(childpath);
-        if (!child)
-            child = vfs_lookup(dir, de.d_name);
-        if (!child)
-            continue;
-
-        if (child->i_ops && child->i_ops->getattr)
-            child->i_ops->getattr(child, &st);
-        else
-        {
-            st.st_ino = child->i_ino;
-            st.st_mode = child->i_mode;
-            st.st_nlink = child->i_nlink;
-            st.st_size = child->i_size;
-            st.st_rdev = child->i_rdev;
-        }
-
-        mode_str(st.st_mode, perms);
-        fmt_size(st.st_size, szstr);
-
-        if (S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode))
-        {
-            kprintf("%s%s %2llu %u %u %3u,%3u %s%s\n",
-                    indent, perms,
-                    (unsigned long long)st.st_nlink,
-                    st.st_uid, st.st_gid,
-                    MAJOR(st.st_rdev), MINOR(st.st_rdev),
-                    path, de.d_name);
-        }
-        else
-        {
-            kprintf("%s%s %2llu %u %u %6s %s%s\n",
-                    indent, perms,
-                    (unsigned long long)st.st_nlink,
-                    st.st_uid, st.st_gid,
-                    szstr,
-                    path, de.d_name);
-        }
-
-        if (S_ISDIR(st.st_mode) && depth < 4 && nsubs < LS_MAX_SUBDIRS)
-        {
-            subdirs[nsubs] = child;
-            ksnprintf(subpaths[nsubs], VFS_PATH_MAX, "%s/", childpath);
-            nsubs++;
-        }
-    }
-
-    kfree(f);
-
-    for (int i = 0; i < nsubs; i++)
-    {
-        kprintf("%s\n", subpaths[i]);
-        ls_dir(subpaths[i], subdirs[i], depth + 1);
-    }
-}
-
 void kmain(void)
 {
     struct limine_file *initrd = NULL;
@@ -321,8 +191,6 @@ void kmain(void)
         devfs_register("tty0", &tty0);
 
     kprintf("moose kernel v0.1.0\n");
-    kprintf("/:\n");
-    ls_dir("/", sb->s_root, 0);
 
     file_t *out = vfs_open("/dev/tty0", O_WRONLY);
     if (!out)
@@ -334,5 +202,6 @@ void kmain(void)
         const char *msg = "Hello via VFS!\n";
         vfs_write(out, msg, strlen(msg));
     }
+
     hlt();
 }
