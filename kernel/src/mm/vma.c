@@ -298,3 +298,46 @@ int vma_handle_fault(vctx_t *ctx, uint64_t addr, bool is_write, bool is_user)
 
     return 0;
 }
+
+#define IOREMAP_BASE 0xFFFFFFFFC0000000ULL
+static uint64_t ioremap_cur = IOREMAP_BASE;
+
+void *vma_ioremap(vctx_t *ctx, uint64_t phys, uint64_t size, uint32_t prot)
+{
+    uint64_t phys_page = ALIGN_DOWN(phys, PAGE_SIZE);
+    uint64_t offset = phys - phys_page;
+    uint64_t map_size = ALIGN_UP(size + offset, PAGE_SIZE);
+
+    uint64_t vaddr = ioremap_cur;
+    ioremap_cur += map_size;
+
+    if (vma_map_phys(ctx, vaddr, phys_page, map_size, prot, 0) != 0)
+        return NULL;
+
+    return (void *)(vaddr + offset);
+}
+
+int vma_iounmap(vctx_t *ctx, void *vaddr, uint64_t size)
+{
+    uint64_t addr = (uint64_t)vaddr;
+    uint64_t page = ALIGN_DOWN(addr, PAGE_SIZE);
+    uint64_t offset = addr - page;
+    uint64_t map_size = ALIGN_UP(size + offset, PAGE_SIZE);
+
+    vma_t *v = ctx->vma_list;
+    while (v)
+    {
+        if (v->start == page)
+        {
+            for (uint64_t off = 0; off < map_size; off += PAGE_SIZE)
+                unmap_page(ctx->ptable, page + off);
+
+            vma_remove(ctx, v);
+            if (v->obj) kfree(v->obj);
+            kfree(v);
+            return 0;
+        }
+        v = v->next;
+    }
+    return -1;
+}

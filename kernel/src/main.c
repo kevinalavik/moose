@@ -20,6 +20,8 @@
 #include <arch/paging.h>
 #include <mm/vma.h>
 #include <mm/kheap.h>
+#include <uacpi/uacpi.h>
+#include <uacpi/event.h>
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -29,6 +31,11 @@ __attribute__((used, section(".limine_requests"))) static volatile uint64_t limi
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0,
+};
+
+__attribute__((used, section(".limine_requests"))) static volatile struct limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID,
     .revision = 0,
 };
 
@@ -72,6 +79,38 @@ int putc(char ch)
     if (tty0.dev)
         device_write(&tty0, &ch, 1);
     return 1;
+}
+
+int acpi_init(void)
+{
+    uacpi_status ret = uacpi_initialize(0);
+    if (uacpi_unlikely_error(ret))
+    {
+        klog("uACPI", COL_BRED "uacpi_initialize error: %s" COL_RESET, uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_namespace_load();
+    if (uacpi_unlikely_error(ret))
+    {
+        klog("uACPI", COL_BRED "uacpi_namespace_load error: %s" COL_RESET, uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_namespace_initialize();
+    if (uacpi_unlikely_error(ret))
+    {
+        klog("uACPI", COL_BRED "uacpi_namespace_initialize error: %s" COL_RESET, uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_finalize_gpe_initialization();
+    if (uacpi_unlikely_error(ret))
+    {
+        klog("uACPI", COL_BRED "GPE initialization error: %s" COL_RESET, uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+    return 0;
 }
 
 void kmain(void)
@@ -131,6 +170,13 @@ void kmain(void)
         hcf();
     }
     moose_hhdm_off = hhdm_request.response->offset;
+
+    if (rsdp_request.response)
+    {
+        uint64_t rsdp_hhdm = (uint64_t)rsdp_request.response->address;
+        moose_rsdp = rsdp_hhdm - moose_hhdm_off;
+    }
+
     pmm_init();
 
     {
@@ -167,6 +213,8 @@ void kmain(void)
     static vctx_t kernel_vctx;
     vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
     current_vctx = &kernel_vctx;
+
+    acpi_init();
 
     superblock_t *sb = tmpfs_mount();
     if (!sb)

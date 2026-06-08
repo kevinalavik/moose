@@ -48,6 +48,8 @@ int vma_map_anon(vctx_t *ctx, uint64_t addr, uint64_t size, uint32_t prot, uint3
 int vma_map_phys(vctx_t *ctx, uint64_t vaddr, uint64_t phys, uint64_t size, uint32_t prot, uint32_t flags);
 int vma_unmap(vctx_t *ctx, uint64_t addr, uint64_t size);
 int vma_handle_fault(vctx_t *ctx, uint64_t addr, bool is_write, bool is_user);
+void *vma_ioremap(vctx_t *ctx, uint64_t phys, uint64_t size, uint32_t prot);
+int vma_iounmap(vctx_t *ctx, void *vaddr, uint64_t size);
 
 extern vctx_t *current_vctx;
 

@@ -240,6 +240,8 @@ static uint64_t tsc_do_calibrate(void)
     return 1000000ULL;
 }
 
+uint64_t tsc_get_khz(void) { return tsc_khz; }
+
 uint64_t tsc_uptime_ms(void)
 {
     if (!tsc_ready)

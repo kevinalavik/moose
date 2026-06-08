@@ -15,4 +15,6 @@ extern uintptr_t moose_hhdm_off;
 extern uint64_t kernel_virt;
 extern uint64_t kernel_phys;
 
+extern uint64_t moose_rsdp;
+
 #endif /* SYS_MOOSE_H */
