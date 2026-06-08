@@ -1,5 +1,6 @@
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
+#include <sys/cred.h>
 #include <sys/klog.h>
 #include <mm/kheap.h>
 #include <lib/string.h>
@@ -57,6 +58,8 @@ static inode_t *tmpfs_alloc_inode(superblock_t *sb, mode_t mode)
 
     inode->i_ino = sb->s_ino_next++;
     inode->i_mode = mode;
+    inode->i_uid = current_cred->euid;
+    inode->i_gid = current_cred->egid;
     inode->i_size = 0;
     inode->i_nlink = 1;
     inode->i_rdev = 0;
@@ -181,6 +184,8 @@ static int tmpfs_getattr(inode_t *inode, stat_t *st)
 {
     st->st_ino = inode->i_ino;
     st->st_mode = inode->i_mode;
+    st->st_uid = inode->i_uid;
+    st->st_gid = inode->i_gid;
     st->st_nlink = inode->i_nlink;
     st->st_size = inode->i_size;
     st->st_rdev = inode->i_rdev;
@@ -221,8 +226,7 @@ static ssize_t tmpfs_read(file_t *file, void *buf, size_t count, loff_t *pos)
     return (ssize_t)count;
 }
 
-static ssize_t tmpfs_write(file_t *file, const void *buf, size_t count,
-                           loff_t *pos)
+static ssize_t tmpfs_write(file_t *file, const void *buf, size_t count, loff_t *pos)
 {
     inode_t *inode = file->f_inode;
 

@@ -16,6 +16,7 @@
 #include <fs/vfs.h>
 #include <fs/tmpfs.h>
 #include <fs/devfs.h>
+#include <sys/cred.h>
 #include <arch/paging.h>
 #include <mm/vma.h>
 #include <mm/kheap.h>
@@ -169,17 +170,19 @@ static void ls_dir(const char *path, inode_t *dir, int depth)
 
         if (S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode))
         {
-            kprintf("%s%s %2llu ? ? %3u,%3u %s%s\n",
+            kprintf("%s%s %2llu %u %u %3u,%3u %s%s\n",
                     indent, perms,
                     (unsigned long long)st.st_nlink,
+                    st.st_uid, st.st_gid,
                     MAJOR(st.st_rdev), MINOR(st.st_rdev),
                     path, de.d_name);
         }
         else
         {
-            kprintf("%s%s %2llu ? ? %6s %s%s\n",
+            kprintf("%s%s %2llu %u %u %6s %s%s\n",
                     indent, perms,
                     (unsigned long long)st.st_nlink,
+                    st.st_uid, st.st_gid,
                     szstr,
                     path, de.d_name);
         }
@@ -239,6 +242,8 @@ void kmain(void)
     tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
     klog("moose", "using %s", device_label(&tty0));
     tsc_init();
+
+    cred_init();
 
     gdt_init();
     idt_init();
@@ -319,15 +324,15 @@ void kmain(void)
     kprintf("/:\n");
     ls_dir("/", sb->s_root, 0);
 
-    file_t *serial = vfs_open("/dev/com1", O_WRONLY);
-    if (!serial)
+    file_t *out = vfs_open("/dev/tty0", O_WRONLY);
+    if (!out)
     {
-        klog("moose", COL_BRED "failed to open /dev/com1" COL_RESET);
+        klog("moose", COL_BRED "failed to open /dev/tty0" COL_RESET);
     }
     else
     {
         const char *msg = "Hello via VFS!\n";
-        vfs_write(serial, msg, strlen(msg));
+        vfs_write(out, msg, strlen(msg));
     }
     hlt();
 }

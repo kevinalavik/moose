@@ -60,6 +60,8 @@ struct stat
 {
     ino_t st_ino;
     mode_t st_mode;
+    uid_t st_uid;
+    gid_t st_gid;
     uint64_t st_nlink;
     uint64_t st_size;
     dev_t st_rdev;
@@ -88,6 +90,8 @@ struct inode
 {
     ino_t i_ino;
     mode_t i_mode;
+    uid_t i_uid;
+    gid_t i_gid;
     uint64_t i_size;
     uint64_t i_nlink;
     dev_t i_rdev;
@@ -144,6 +148,8 @@ int vfs_readdir(file_t *file, dirent_t *dirent);
 loff_t vfs_llseek(file_t *file, loff_t offset, int whence);
 int vfs_stat(const char *path, stat_t *st);
 int vfs_fstat(file_t *file, stat_t *st);
+int vfs_chmod(const char *path, mode_t mode);
+int vfs_chown(const char *path, uid_t uid, gid_t gid);
 
 static inline uint8_t vfs_mode_to_dtype(mode_t mode)
 {

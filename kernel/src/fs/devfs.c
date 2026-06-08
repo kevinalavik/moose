@@ -2,6 +2,7 @@
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
 #include <dev/dev.h>
+#include <sys/cred.h>
 #include <sys/klog.h>
 #include <mm/kheap.h>
 #include <lib/string.h>
@@ -71,6 +72,8 @@ static int devfs_chr_getattr(inode_t *inode, stat_t *st)
 {
     st->st_ino = inode->i_ino;
     st->st_mode = inode->i_mode;
+    st->st_uid = inode->i_uid;
+    st->st_gid = inode->i_gid;
     st->st_nlink = inode->i_nlink;
     st->st_size = 0;
     st->st_rdev = inode->i_rdev;
@@ -94,6 +97,8 @@ static inode_t *devfs_alloc_chr_inode(handle_t *handle, dev_t rdev)
 
     inode->i_ino = devfs_sb->s_ino_next++;
     inode->i_mode = S_IFCHR | 0660;
+    inode->i_uid = 0;
+    inode->i_gid = 0;
     inode->i_size = 0;
     inode->i_nlink = 1;
     inode->i_rdev = rdev;
