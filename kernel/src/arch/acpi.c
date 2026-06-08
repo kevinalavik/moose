@@ -4,6 +4,7 @@
 #include <uacpi/uacpi.h>
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
+#include <uacpi/event.h>
 #include <sys/errno.h>
 #include <sys/klog.h>
 
@@ -159,14 +160,21 @@ int acpi_init(void)
 
 	ret = uacpi_namespace_load();
 	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI", "namespace load failed: %s",
+		klog("uACPI", COL_RED "namespace load failed: %s" COL_RESET,
 		     uacpi_status_to_string(ret));
 		return -ENODEV;
 	}
 
 	ret = uacpi_namespace_initialize();
 	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI", "namespace init failed: %s",
+		klog("uACPI", COL_RED "namespace init failed: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -ENODEV;
+	}
+
+	ret = uacpi_finalize_gpe_initialization();
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI", COL_RED "GPE initialization error: %s" COL_RESET,
 		     uacpi_status_to_string(ret));
 		return -ENODEV;
 	}
