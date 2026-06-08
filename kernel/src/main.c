@@ -186,7 +186,7 @@ void kmain(void)
     devfs_init();
 
     if (device_handle_valid(&com1))
-        devfs_register("com1", &com1);
+        devfs_register("ttyS0", &com1);
     if (device_handle_valid(&tty0))
         devfs_register("tty0", &tty0);
 
