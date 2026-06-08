@@ -15,8 +15,10 @@
 #include <fs/cpio.h>
 #include <fs/vfs.h>
 #include <fs/tmpfs.h>
+#include <fs/devfs.h>
 #include <arch/paging.h>
 #include <mm/vma.h>
+#include <mm/kheap.h>
 
 __attribute__((used, section(".limine_requests_start"))) static volatile uint64_t limine_requests_start_marker[] =
     LIMINE_REQUESTS_START_MARKER;
@@ -26,23 +28,28 @@ __attribute__((used, section(".limine_requests"))) static volatile uint64_t limi
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0};
+    .revision = 0,
+};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_module_request module_request = {
     .id = LIMINE_MODULE_REQUEST_ID,
-    .revision = 0};
+    .revision = 0,
+};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_memmap_request memmap_request = {
     .id = LIMINE_MEMMAP_REQUEST_ID,
-    .revision = 0};
+    .revision = 0,
+};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_hhdm_request hhdm_request = {
     .id = LIMINE_HHDM_REQUEST_ID,
-    .revision = 0};
+    .revision = 0,
+};
 
 __attribute__((used, section(".limine_requests"))) static volatile struct limine_executable_address_request kernel_file_request = {
     .id = LIMINE_EXECUTABLE_FILE_REQUEST_ID,
-    .revision = 0};
+    .revision = 0,
+};
 
 __attribute__((used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =
     LIMINE_REQUESTS_END_MARKER;
@@ -66,6 +73,134 @@ int putc(char ch)
     return 1;
 }
 
+static void mode_str(mode_t mode, char out[11])
+{
+    out[0] = S_ISDIR(mode) ? 'd' : S_ISCHR(mode) ? 'c'
+                               : S_ISBLK(mode)   ? 'b'
+                               : S_ISLNK(mode)   ? 'l'
+                                                 : '-';
+    out[1] = (mode & S_IRUSR) ? 'r' : '-';
+    out[2] = (mode & S_IWUSR) ? 'w' : '-';
+    out[3] = (mode & S_IXUSR) ? 'x' : '-';
+    out[4] = (mode & S_IRGRP) ? 'r' : '-';
+    out[5] = (mode & S_IWGRP) ? 'w' : '-';
+    out[6] = (mode & S_IXGRP) ? 'x' : '-';
+    out[7] = (mode & S_IROTH) ? 'r' : '-';
+    out[8] = (mode & S_IWOTH) ? 'w' : '-';
+    out[9] = (mode & S_IXOTH) ? 'x' : '-';
+    out[10] = '\0';
+}
+
+static void fmt_size(uint64_t size, char out[8])
+{
+    const char *units = "BKMGT";
+    int u = 0;
+    uint64_t v = size;
+
+    while (v >= 1024 && u < 4)
+    {
+        v /= 1024;
+        u++;
+    }
+
+    if (u == 0)
+        ksnprintf(out, 8, "%lluB", (unsigned long long)v);
+    else
+        ksnprintf(out, 8, "%llu%c", (unsigned long long)v, units[u]);
+}
+
+#define LS_MAX_SUBDIRS 64
+
+static void ls_dir(const char *path, inode_t *dir, int depth)
+{
+    char perms[11];
+    char szstr[8];
+    dirent_t de;
+    stat_t st;
+    char indent[32];
+    int ind = depth * 2;
+
+    inode_t *subdirs[LS_MAX_SUBDIRS];
+    char subpaths[LS_MAX_SUBDIRS][VFS_PATH_MAX];
+    int nsubs = 0;
+
+    if (ind >= (int)sizeof(indent) - 1)
+        ind = (int)sizeof(indent) - 2;
+    for (int i = 0; i < ind; i++)
+        indent[i] = ' ';
+    indent[ind] = '\0';
+
+    file_t *f = kmalloc(sizeof(file_t));
+    if (!f)
+        return;
+    f->f_inode = dir;
+    f->f_op = dir->i_fop;
+    f->f_pos = 0;
+    f->f_flags = O_RDONLY;
+
+    while (f->f_op && f->f_op->readdir &&
+           f->f_op->readdir(f, &de, &f->f_pos) == 0)
+    {
+        if (strcmp(de.d_name, ".") == 0 || strcmp(de.d_name, "..") == 0)
+            continue;
+
+        char childpath[VFS_PATH_MAX];
+        ksnprintf(childpath, sizeof(childpath), "%s%s", path, de.d_name);
+
+        inode_t *child = vfs_inode(childpath);
+        if (!child)
+            child = vfs_lookup(dir, de.d_name);
+        if (!child)
+            continue;
+
+        if (child->i_ops && child->i_ops->getattr)
+            child->i_ops->getattr(child, &st);
+        else
+        {
+            st.st_ino = child->i_ino;
+            st.st_mode = child->i_mode;
+            st.st_nlink = child->i_nlink;
+            st.st_size = child->i_size;
+            st.st_rdev = child->i_rdev;
+        }
+
+        mode_str(st.st_mode, perms);
+        fmt_size(st.st_size, szstr);
+
+        if (S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode))
+        {
+            kprintf("%s%s %2llu ? ? %3u,%3u %s%s\n",
+                    indent, perms,
+                    (unsigned long long)st.st_nlink,
+                    MAJOR(st.st_rdev), MINOR(st.st_rdev),
+                    path, de.d_name);
+        }
+        else
+        {
+            kprintf("%s%s %2llu ? ? %6s %s%s\n",
+                    indent, perms,
+                    (unsigned long long)st.st_nlink,
+                    szstr,
+                    path, de.d_name);
+        }
+
+        if (S_ISDIR(st.st_mode) && depth < 4 && nsubs < LS_MAX_SUBDIRS)
+        {
+            subdirs[nsubs] = child;
+            ksnprintf(subpaths[nsubs], VFS_PATH_MAX, "%s/", childpath);
+            nsubs++;
+        }
+    }
+
+    kfree(f);
+
+    for (int i = 0; i < nsubs; i++)
+    {
+        kprintf("%s\n", subpaths[i]);
+        ls_dir(subpaths[i], subdirs[i], depth + 1);
+    }
+}
+
 void kmain(void)
 {
     struct limine_file *initrd = NULL;
@@ -75,22 +210,17 @@ void kmain(void)
 
     com1 = uart_init(COM1);
     if (com1.dev == NULL)
-    {
-        /* this is sort-of pointless rn since there will be no output if uart fails  since it inits before fb*/
         klog("moose", COL_AMBER "failed to open COM1 device handle" COL_RESET);
-    }
 
     if (!framebuffer_request.response ||
         framebuffer_request.response->framebuffer_count < 1)
     {
         klog("moose", COL_BRED "failed to get framebuffer" COL_RESET);
-        hcf(); /* this is a graphical OS so if no framebuffer available then fuck off*/
+        hcf();
     }
 
     if (!module_request.response)
-    {
-        klog("moose", COL_AMBER "failed to get kernel modules, no present?" COL_RESET);
-    }
+        klog("moose", COL_AMBER "no kernel modules present" COL_RESET);
 
     moose_fb = framebuffer_request.response->framebuffers[0];
     if (!moose_fb || !moose_fb->address)
@@ -101,7 +231,8 @@ void kmain(void)
 
     if (moose_fb->bpp < 8 || moose_fb->bpp % 8 != 0)
     {
-        klog("moose", COL_BRED "unsupported framebuffer bpp: %d" COL_RESET, moose_fb->bpp);
+        klog("moose", COL_BRED "unsupported framebuffer bpp: %d" COL_RESET,
+             moose_fb->bpp);
         hcf();
     }
 
@@ -129,14 +260,12 @@ void kmain(void)
 
     {
         uint64_t *a = PHYS_TO_VIRT(pmm_alloc());
-        klog("moose", "Allocate single page @ %p", a);
-        pmm_ref(a); /* we now manage it */
+        klog("moose", "allocate single page @ %p", a);
+        pmm_ref(a);
         *a = 42;
-        klog("moose", "Wrote \"%d\" to %p", *a, a);
-        pmm_unref(a); /* not managed by us when we are done */
+        klog("moose", "wrote \"%d\" to %p", *a, a);
+        pmm_unref(a);
         pmm_free(a);
-
-        /*   we dont need to ref and unref, i  just do it as a test*/
     }
 
     if (module_request.response)
@@ -156,41 +285,49 @@ void kmain(void)
         klog("moose", COL_BRED "failed to get kernel info" COL_RESET);
         hcf();
     }
-
     kernel_virt = kernel_file_request.response->virtual_base;
     kernel_phys = kernel_file_request.response->physical_base;
     paging_init();
 
     static vctx_t kernel_vctx;
     vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
-    current_vctx = &kernel_vctx; /* todo: when we got scheduler we actually store this in the pcb */
-    vfs_init();
+    current_vctx = &kernel_vctx;
+
     superblock_t *sb = tmpfs_mount();
-    if (sb)
+    if (!sb)
     {
-        vfs_mount_root("/", sb);
+        klog("moose", COL_BRED "failed to mount root tmpfs" COL_RESET);
+        hcf();
+    }
+    vfs_mount("/", sb);
 
-        if (initrd)
-        {
-            klog("moose", "found initrd @ %s", initrd->path);
-            cpio_archive_extract(sb->s_root, initrd->address, initrd->size);
-        }
+    if (initrd)
+    {
+        klog("moose", "found initrd @ %s", initrd->path);
+        cpio_archive_extract(sb->s_root, initrd->address, initrd->size);
     }
 
-    kprintf("moose kernel v0.1.0 (not stable, womp womp)\n");
+    vfs_mkdir_p(sb->s_root, "dev", S_IFDIR | 0755);
+    devfs_init();
 
-    file_t *f = vfs_open("/test.txt", O_RDONLY);
-    if (f)
+    if (device_handle_valid(&com1))
+        devfs_register("com1", &com1);
+    if (device_handle_valid(&tty0))
+        devfs_register("tty0", &tty0);
+
+    kprintf("moose kernel v0.1.0\n");
+    kprintf("/:\n");
+    ls_dir("/", sb->s_root, 0);
+
+    file_t *serial = vfs_open("/dev/com1", O_WRONLY);
+    if (!serial)
     {
-        char buf[256];
-        ssize_t n = vfs_file_read(f, buf, sizeof(buf) - 1);
-        if (n > 0)
-        {
-            buf[n] = '\0';
-            kprintf("/test.txt: %s\n", buf);
-        }
-        vfs_close(f);
+        klog("moose", COL_BRED "failed to open /dev/com1" COL_RESET);
     }
-
+    else
+    {
+        const char *msg = "Hello via VFS!\n";
+        vfs_write(serial, msg, strlen(msg));
+    }
     hlt();
 }

@@ -10,7 +10,9 @@ int memcmp(const void *a, const void *b, size_t n);
 
 size_t strlen(const char *s);
 int strcmp(const char *a, const char *b);
+int strncmp(const char *a, const char *b, size_t n);
 char *strcpy(char *restrict dst, const char *restrict src);
+char *strncpy(char *restrict dst, const char *restrict src, size_t n);
 char *strrchr(const char *s, int c);
 
 #endif /* LIB_STRING_H */

@@ -42,7 +42,7 @@ static int cpio_do_file(inode_t *root, const char *path,
                         const void *data, unsigned int filesize)
 {
     char parent[256], name[256];
-    inode_t *dir, *file;
+    inode_t *dir, *ino;
     const char *slash;
     int err;
 
@@ -83,12 +83,25 @@ static int cpio_do_file(inode_t *root, const char *path,
     if (!dir)
         return -1;
 
-    err = vfs_create(dir, name, 0644, &file);
+    err = vfs_create(dir, name, 0644, &ino);
     if (err)
         return err;
 
-    if (vfs_write(file, data, filesize, 0) < 0)
-        return -1;
+    if (filesize > 0 && data)
+    {
+        /* write via a temporary file handle */
+        file_t tmp_file;
+        tmp_file.f_inode = ino;
+        tmp_file.f_op = ino->i_fop;
+        tmp_file.f_pos = 0;
+        tmp_file.f_flags = O_WRONLY;
+
+        if (tmp_file.f_op && tmp_file.f_op->write)
+        {
+            loff_t pos = 0;
+            tmp_file.f_op->write(&tmp_file, data, filesize, &pos);
+        }
+    }
 
     return 0;
 }
