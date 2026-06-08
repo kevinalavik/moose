@@ -54,6 +54,10 @@ static inline void sti()
 {
 	__asm__ volatile("sti");
 }
+static inline void cli()
+{
+	__asm__ volatile("cli");
+}
 
 static inline uint64_t read_cr2(void)
 {

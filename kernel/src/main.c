@@ -1,3 +1,5 @@
+#include <arch/acpi.h>
+#include <uacpi/status.h>
 #include <limine.h>
 #include <lib/string.h>
 #include <dev/tty.h>
@@ -20,8 +22,27 @@
 #include <arch/paging.h>
 #include <mm/vma.h>
 #include <mm/kheap.h>
-#include <uacpi/uacpi.h>
-#include <uacpi/event.h>
+#include <uacpi/sleep.h>
+
+int system_shutdown(void)
+{
+	uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5);
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI",
+		     COL_RED "failed to prepare for sleep: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -EIO;
+	}
+
+	ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5);
+	if (uacpi_unlikely_error(ret)) {
+		klog("uACPI", COL_RED "failed to enter sleep: %s" COL_RESET,
+		     uacpi_status_to_string(ret));
+		return -EIO;
+	}
+
+	return 0;
+}
 
 __attribute__((used,
 	       section(".limine_requests_start"))) static volatile uint64_t
@@ -100,44 +121,9 @@ int putc(char ch)
 	return 1;
 }
 
-int acpi_init(void)
-{
-	uacpi_status ret = uacpi_initialize(0);
-	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI", COL_BRED "uacpi_initialize error: %s" COL_RESET,
-		     uacpi_status_to_string(ret));
-		return -ENODEV;
-	}
-
-	ret = uacpi_namespace_load();
-	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI",
-		     COL_BRED "uacpi_namespace_load error: %s" COL_RESET,
-		     uacpi_status_to_string(ret));
-		return -ENODEV;
-	}
-
-	ret = uacpi_namespace_initialize();
-	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI",
-		     COL_BRED "uacpi_namespace_initialize error: %s" COL_RESET,
-		     uacpi_status_to_string(ret));
-		return -ENODEV;
-	}
-
-	ret = uacpi_finalize_gpe_initialization();
-	if (uacpi_unlikely_error(ret)) {
-		klog("uACPI", COL_BRED "GPE initialization error: %s" COL_RESET,
-		     uacpi_status_to_string(ret));
-		return -ENODEV;
-	}
-	return 0;
-}
-
 void kmain(void)
 {
-	struct limine_file *initrd = NULL;
-
+	cli();
 	if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
 		hcf();
 
@@ -206,6 +192,7 @@ void kmain(void)
 		pmm_free(a);
 	}
 
+	struct limine_file *initrd = NULL;
 	if (module_request.response) {
 		klog("moose", "module list:");
 		for (uint64_t i = 0; i < module_request.response->module_count;
@@ -263,5 +250,6 @@ void kmain(void)
 		vfs_write(out, msg, strlen(msg));
 	}
 
+	// system_shutdown();
 	hlt();
 }

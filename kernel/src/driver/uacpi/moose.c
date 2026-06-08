@@ -1,23 +1,13 @@
+#include "uacpi/status.h"
 #include <stddef.h>
 #include <stdint.h>
-#include <uacpi/types.h>
-#include <uacpi/platform/arch_helpers.h>
+#include <uacpi/kernel_api.h>
 #include <sys/moose.h>
 #include <sys/klog.h>
 #include <arch/cpu.h>
 #include <mm/kheap.h>
 #include <mm/vma.h>
 #include <dev/tsc.h>
-
-#ifndef UACPI_STATUS_NOT_SUPPORTED
-#define UACPI_STATUS_NOT_SUPPORTED UACPI_STATUS_NOT_FOUND
-#endif
-
-#ifndef UACPI_WORK_TYPE_DEFINED
-typedef uacpi_u32 uacpi_work_type;
-typedef void (*uacpi_work_handler)(uacpi_handle);
-#define UACPI_WORK_TYPE_DEFINED
-#endif
 
 uint64_t moose_rsdp = 0;
 
@@ -97,7 +87,7 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address,
 {
 	(void)address;
 	*out_handle = NULL;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle)
@@ -110,7 +100,7 @@ uacpi_status uacpi_kernel_pci_read8(uacpi_handle h, uacpi_size o, uacpi_u8 *v)
 	(void)h;
 	(void)o;
 	*v = 0;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle h, uacpi_size o, uacpi_u16 *v)
@@ -118,7 +108,7 @@ uacpi_status uacpi_kernel_pci_read16(uacpi_handle h, uacpi_size o, uacpi_u16 *v)
 	(void)h;
 	(void)o;
 	*v = 0;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle h, uacpi_size o, uacpi_u32 *v)
@@ -126,7 +116,7 @@ uacpi_status uacpi_kernel_pci_read32(uacpi_handle h, uacpi_size o, uacpi_u32 *v)
 	(void)h;
 	(void)o;
 	*v = 0;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle h, uacpi_size o, uacpi_u8 v)
@@ -134,7 +124,7 @@ uacpi_status uacpi_kernel_pci_write8(uacpi_handle h, uacpi_size o, uacpi_u8 v)
 	(void)h;
 	(void)o;
 	(void)v;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle h, uacpi_size o, uacpi_u16 v)
@@ -142,7 +132,7 @@ uacpi_status uacpi_kernel_pci_write16(uacpi_handle h, uacpi_size o, uacpi_u16 v)
 	(void)h;
 	(void)o;
 	(void)v;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle h, uacpi_size o, uacpi_u32 v)
@@ -150,7 +140,7 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle h, uacpi_size o, uacpi_u32 v)
 	(void)h;
 	(void)o;
 	(void)v;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len,
@@ -329,7 +319,7 @@ void uacpi_kernel_reset_event(uacpi_handle h)
 uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *r)
 {
 	(void)r;
-	return UACPI_STATUS_NOT_SUPPORTED;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq,

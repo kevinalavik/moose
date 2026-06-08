@@ -15,7 +15,7 @@ ifeq ($(V),1)
 Q :=
 endif
 
-QEMUFLAGS := -m 2G -serial stdio
+QEMUFLAGS := -m 2G -serial stdio -enable-kvm -cpu host -smp 4
 
 HOST_CC := cc
 HOST_CFLAGS := -g -O2 -pipe
