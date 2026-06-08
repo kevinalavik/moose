@@ -976,8 +976,12 @@ void term_putc(term_t *t, char c)
 	}
 
 	if ((unsigned char)c >= 0x20 && (unsigned char)c != 0x7f) {
+		bool was_drawn = t->cursor_drawn;
+		if (was_drawn)
+			cursor_hide(t);
 		put_glyph(t, c);
-		cursor_show(t);
+		if (was_drawn)
+			cursor_show(t);
 	}
 }
 

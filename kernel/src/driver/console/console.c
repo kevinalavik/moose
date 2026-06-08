@@ -1,4 +1,6 @@
-#include <dev/tty.h>
+#include <tty/tty.h>
+#include <dev/device.h>
+#include <dev/platform.h>
 #include <term/term.h>
 
 struct console {
@@ -42,15 +44,17 @@ static const tty_ops_t con_ops = {
 	.control = con_control,
 };
 
-handle_t console_init(struct limine_framebuffer *fb, const void *psf_data,
-		      size_t psf_size)
+int console_init(struct limine_framebuffer *fb, const void *psf_data,
+		 size_t psf_size, device_t *dev)
 {
-	if (!fb || !psf_data)
-		return HANDLE_INVALID;
+	if (!fb || !psf_data || !dev)
+		return -1;
 
 	static struct console con;
 	term_init(&con.term, fb, psf_data, psf_size);
 	con.active = true;
 	con.term.fb = fb;
-	return tty_register("tty0", &con_ops, &con);
+
+	dev->chardev = tty_register("tty0", &con_ops, &con);
+	return char_dev_valid(&dev->chardev) ? 0 : -1;
 }

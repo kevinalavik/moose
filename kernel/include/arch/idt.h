@@ -46,6 +46,9 @@ typedef struct int_frame {
 	uint64_t ss;
 } __attribute__((packed)) int_frame_t;
 
-void idt_init();
+void idt_init(void);
+
+typedef void (*irq_handler_t)(int_frame_t *frame);
+int irq_register(uint8_t vector, irq_handler_t handler);
 
 #endif /* ARCH_IDT_H */

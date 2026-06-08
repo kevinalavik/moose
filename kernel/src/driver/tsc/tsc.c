@@ -1,7 +1,5 @@
-#include <dev/tsc.h>
-#include <dev/dev.h>
+#include <tsc/tsc.h>
 #include <arch/cpu.h>
-#include <lib/string.h>
 #include <sys/klog.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -129,15 +127,20 @@ static uint64_t pit_calibrate_tsc(uint16_t latch, uint64_t ms, int loopmin)
 	tscmax = 0;
 	tscmin = UINT64_MAX;
 
-	while ((inb(PIT_GATE) & 0x20) == 0) {
-		t2 = rdtsc();
-		delta = t2 - tsc;
-		tsc = t2;
-		if (delta < tscmin)
-			tscmin = delta;
-		if (delta > tscmax)
-			tscmax = delta;
-		pitcnt++;
+	{
+		uint64_t deadline = rdtsc() + 500000000ULL;
+		while ((inb(PIT_GATE) & 0x20) == 0) {
+			t2 = rdtsc();
+			if (t2 > deadline)
+				return UINT64_MAX;
+			delta = t2 - tsc;
+			tsc = t2;
+			if (delta < tscmin)
+				tscmin = delta;
+			if (delta > tscmax)
+				tscmax = delta;
+			pitcnt++;
+		}
 	}
 
 	if (pitcnt < loopmin || tscmin > UINT64_MAX / 10 ||
@@ -255,28 +258,9 @@ uint64_t tsc_uptime_us(void)
 	return ((rdtsc() - tsc_boot) * 1000ULL) / tsc_khz;
 }
 
-static size_t tsc_read(handle_t *h, void *buf, size_t len)
-{
-	(void)h;
-	if (!buf || len < sizeof(uint64_t))
-		return 0;
-	uint64_t ms = tsc_uptime_ms();
-	memcpy(buf, &ms, sizeof(ms));
-	return sizeof(uint64_t);
-}
-
-static const dev_ops_t tsc_ops = {
-	.read = tsc_read,
-	.write = NULL,
-};
-
-static handle_t tsc_handle = HANDLE_INVALID;
-
-handle_t tsc_init(void)
+void tsc_init(void)
 {
 	tsc_boot = rdtsc();
 	tsc_khz = tsc_do_calibrate();
 	tsc_ready = 1;
-	tsc_handle = device_handle_make((void *)&tsc_handle, &tsc_ops, "tsc0");
-	return tsc_handle;
 }

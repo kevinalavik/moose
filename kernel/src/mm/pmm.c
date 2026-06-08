@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/klog.h>
-#include <dev/tty.h>
+#include <tty/tty.h>
 #include <lib/math.h>
 
 page_t *root = NULL;
@@ -241,6 +241,64 @@ void pmm_unref(void *ptr)
 	}
 
 	p->refcount--;
+}
+
+void *pmm_alloc_contiguous(size_t count)
+{
+	if (count == 0 || count > free_pages)
+		return NULL;
+
+	if (count == 1)
+		return pmm_alloc();
+
+	page_t **prev_next = &root;
+	page_t *start = root;
+
+	while (start) {
+		uint64_t start_pfn = (uint64_t)(start - mem_map);
+		page_t *p = start;
+		int ok = 1;
+
+		for (size_t i = 1; i < count; i++) {
+			if (!p->next ||
+			    (uint64_t)(p->next - mem_map) != start_pfn + i) {
+				ok = 0;
+				break;
+			}
+			p = p->next;
+		}
+
+		if (ok) {
+			page_t *next_after = p->next;
+			*prev_next = next_after;
+
+			if (root) {
+				page_t *t = root;
+				while (t->next)
+					t = t->next;
+				tail = t;
+			} else {
+				tail = NULL;
+			}
+
+			page_t *page = start;
+			for (size_t i = 0; i < count; i++) {
+				page->flags = PAGE_USED;
+				page->refcount = 0;
+				page->next = NULL;
+				free_pages--;
+				used_pages++;
+				page++;
+			}
+
+			return (void *)(start_pfn * PAGE_SIZE);
+		}
+
+		prev_next = &start->next;
+		start = start->next;
+	}
+
+	return NULL;
 }
 
 void pmm_free(void *ptr)

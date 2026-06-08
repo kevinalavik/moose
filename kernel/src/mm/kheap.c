@@ -13,6 +13,13 @@
 #define MIN_BLOCK 64
 #define HEAP_PAGES_PER_GROW 1
 
+#define KMALLOC_PAGE_MAGIC 0x50414745
+
+typedef struct {
+	uint32_t magic;
+	uint32_t npages;
+} __attribute__((packed)) kmalloc_page_hdr_t;
+
 typedef struct hdr {
 	size_t size;
 	uint32_t magic;
@@ -64,12 +71,23 @@ static int heap_grow(size_t min_size)
 	if (npages < HEAP_PAGES_PER_GROW)
 		npages = HEAP_PAGES_PER_GROW;
 
+	void *phys = pmm_alloc_contiguous(npages);
+	if (phys) {
+		uint8_t *page = PHYS_TO_VIRT(phys);
+		hdr_t *block = (hdr_t *)page;
+		block->size = npages * PAGE_SIZE - HDR_SZ;
+		block->magic = HDR_MAGIC;
+		block->free = 1;
+		hdr_insert(block);
+		return 0;
+	}
+
 	uint8_t *base = NULL;
 	uint64_t prev_phys = 0;
 	size_t contiguous = 0;
 
 	for (size_t i = 0; i < npages; i++) {
-		void *phys = pmm_alloc();
+		phys = pmm_alloc();
 		if (!phys) {
 			for (size_t j = 0; j < i; j++)
 				pmm_free((void *)((uint64_t)base -
@@ -110,6 +128,18 @@ void *kmalloc(size_t size)
 {
 	if (!size)
 		return NULL;
+
+	if (size >= PAGE_SIZE) {
+		size_t total = size + sizeof(kmalloc_page_hdr_t);
+		size_t npages = ALIGN_UP(total, PAGE_SIZE) / PAGE_SIZE;
+		void *phys = pmm_alloc_contiguous(npages);
+		if (!phys)
+			return NULL;
+		kmalloc_page_hdr_t *hdr = PHYS_TO_VIRT(phys);
+		hdr->magic = KMALLOC_PAGE_MAGIC;
+		hdr->npages = npages;
+		return (uint8_t *)hdr + sizeof(kmalloc_page_hdr_t);
+	}
 
 	size = (size + 7) & ~(size_t)7;
 	for (int attempt = 0; attempt < 2; attempt++) {
@@ -157,6 +187,16 @@ void kfree(void *ptr)
 {
 	if (!ptr)
 		return;
+
+	kmalloc_page_hdr_t *hdr =
+		(kmalloc_page_hdr_t *)((uint8_t *)ptr -
+				       sizeof(kmalloc_page_hdr_t));
+	if ((uintptr_t)hdr % PAGE_SIZE == 0 &&
+	    hdr->magic == KMALLOC_PAGE_MAGIC) {
+		for (uint32_t i = 0; i < hdr->npages; i++)
+			pmm_free((void *)((uintptr_t)hdr + i * PAGE_SIZE));
+		return;
+	}
 
 	hdr_t *h = (hdr_t *)ptr - 1;
 	if (h->magic != HDR_MAGIC || h->free) {

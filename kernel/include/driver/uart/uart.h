@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <dev/dev.h>
+#include <dev/device.h>
 
 /* super basic uart driver thanks to: https://wiki.osdev.org/UART */
 #define COM_DEVICES            \
@@ -25,6 +25,6 @@ typedef struct com_dev {
 	uint16_t port;
 } com_dev_t;
 
-handle_t uart_init(com_port_t port);
+int uart_init(device_t *dev, com_port_t port);
 
 #endif /* DEV_UART_H */

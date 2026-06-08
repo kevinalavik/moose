@@ -14,22 +14,22 @@
 #define MAX_NMI 16
 #define MAX_LAPIC_NMI 32
 
-static struct acpi_madt *madt;
+struct acpi_madt *madt;
 
-static struct acpi_madt_lapic lapic[MAX_LAPIC];
-static struct acpi_madt_ioapic ioapic[MAX_IOAPIC];
-static struct acpi_madt_interrupt_source_override iso[MAX_ISO];
+struct acpi_madt_lapic lapic[MAX_LAPIC];
+struct acpi_madt_ioapic ioapic[MAX_IOAPIC];
+struct acpi_madt_interrupt_source_override iso[MAX_ISO];
 static struct acpi_madt_nmi_source nmi[MAX_NMI];
-static struct acpi_madt_lapic_nmi lapic_nmi[MAX_LAPIC_NMI];
+struct acpi_madt_lapic_nmi lapic_nmi[MAX_LAPIC_NMI];
 
-static size_t lapic_count;
-static size_t ioapic_count;
-static size_t iso_count;
+size_t lapic_count;
+size_t ioapic_count;
+size_t iso_count;
 static size_t nmi_count;
-static size_t lapic_nmi_count;
+size_t lapic_nmi_count;
 
-static struct acpi_madt_lapic_address_override lapic_override;
-static int has_lapic_override;
+struct acpi_madt_lapic_address_override lapic_override;
+int has_lapic_override;
 
 static uacpi_iteration_decision parse_madt(void *user,
 					   struct acpi_entry_hdr *hdr)

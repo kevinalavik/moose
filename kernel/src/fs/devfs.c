@@ -1,7 +1,7 @@
 #include <fs/devfs.h>
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
-#include <dev/dev.h>
+#include <dev/device.h>
 #include <sys/cred.h>
 #include <sys/klog.h>
 #include <mm/kheap.h>
@@ -9,7 +9,7 @@
 #include <sys/types.h>
 
 struct devfs_node {
-	handle_t handle;
+	char_dev_t dev;
 	char name[VFS_NAME_MAX + 1];
 };
 
@@ -54,9 +54,9 @@ static ssize_t devfs_chr_read(file_t *file, void *buf, size_t count,
 {
 	struct devfs_node *dn = file->f_inode->i_private;
 	(void)pos;
-	if (!dn || !device_handle_valid(&dn->handle))
+	if (!dn || !char_dev_valid(&dn->dev))
 		return -1;
-	return (ssize_t)device_read(&dn->handle, buf, count);
+	return (ssize_t)dn->dev.read(&dn->dev, buf, count);
 }
 
 static ssize_t devfs_chr_write(file_t *file, const void *buf, size_t count,
@@ -64,9 +64,9 @@ static ssize_t devfs_chr_write(file_t *file, const void *buf, size_t count,
 {
 	struct devfs_node *dn = file->f_inode->i_private;
 	(void)pos;
-	if (!dn || !device_handle_valid(&dn->handle))
+	if (!dn || !char_dev_valid(&dn->dev))
 		return -1;
-	return (ssize_t)device_write(&dn->handle, buf, count);
+	return (ssize_t)dn->dev.write(&dn->dev, buf, count);
 }
 
 static int devfs_chr_getattr(inode_t *inode, stat_t *st)
@@ -81,13 +81,13 @@ static int devfs_chr_getattr(inode_t *inode, stat_t *st)
 	return 0;
 }
 
-static inode_t *devfs_alloc_chr_inode(handle_t *handle, dev_t rdev)
+static inode_t *devfs_alloc_chr_inode(char_dev_t *dev, dev_t rdev)
 {
 	struct devfs_node *dn = kmalloc(sizeof(struct devfs_node));
 	if (!dn)
 		return NULL;
 
-	dn->handle = *handle;
+	dn->dev = *dev;
 
 	inode_t *inode = kmalloc(sizeof(inode_t));
 	if (!inode) {
@@ -131,13 +131,13 @@ void devfs_init(void)
 	klog("devfs", "initialized at /dev");
 }
 
-int devfs_register(const char *name, handle_t *handle)
+int devfs_register(const char *name, char_dev_t *dev)
 {
-	if (!name || !handle || !devfs_root)
+	if (!name || !dev || !devfs_root)
 		return -1;
 
-	if (!device_handle_valid(handle)) {
-		klog("devfs", "register: invalid handle for '%s'", name);
+	if (!char_dev_valid(dev)) {
+		klog("devfs", "register: invalid dev for '%s'", name);
 		return -1;
 	}
 
@@ -146,7 +146,7 @@ int devfs_register(const char *name, handle_t *handle)
 		return -1;
 	}
 
-	inode_t *inode = devfs_alloc_chr_inode(handle, 0);
+	inode_t *inode = devfs_alloc_chr_inode(dev, 0);
 	if (!inode) {
 		klog("devfs", "register: OOM for '%s'", name);
 		return -1;
@@ -193,6 +193,5 @@ int devfs_unregister(const char *name)
 	}
 	inode->i_fop = NULL;
 	inode->i_ops = NULL;
-	klog("devfs", "unregistered /dev/%s", name);
 	return 0;
 }

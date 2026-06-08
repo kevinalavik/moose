@@ -4,10 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <term/ansi.h>
+#include <dev/device.h>
 
 #define TTY_NAME_MAX 16
-
-#include <dev/dev.h>
 
 typedef enum {
 	TTY_CTRL_PRESENT,
@@ -19,11 +18,10 @@ typedef struct tty_ops {
 	int (*control)(void *priv, tty_ctrl_cmd_t cmd, void *arg);
 } tty_ops_t;
 
-handle_t tty_register(const char *name, const tty_ops_t *ops, void *priv);
-int tty_control(handle_t *h, tty_ctrl_cmd_t cmd, void *arg);
+char_dev_t tty_register(const char *name, const tty_ops_t *ops, void *priv);
 
 struct limine_framebuffer;
-handle_t console_init(struct limine_framebuffer *fb, const void *psf_data,
-		      size_t psf_size);
+int console_init(struct limine_framebuffer *fb, const void *psf_data,
+		 size_t psf_size, device_t *dev);
 
-#endif /* DEV_TTY_H*/
+#endif /* DEV_TTY_H */

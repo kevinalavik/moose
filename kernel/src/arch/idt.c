@@ -1,7 +1,8 @@
 #include <arch/idt.h>
+#include <arch/apic.h>
 #include <arch/cpu.h>
 #include <sys/klog.h>
-#include <dev/tty.h>
+#include <tty/tty.h>
 #include <arch/gdt.h>
 #include <stdbool.h>
 #include <mm/vma.h>
@@ -9,8 +10,9 @@
 __attribute__((aligned(16))) static idt_entry_t idt[256];
 static idtr_t idtr;
 
-static bool vectors[256];
 static bool warned[256];
+
+static irq_handler_t irq_handlers[256];
 
 extern void *isr_stub_table[];
 static int exception_handler(int_frame_t *frame)
@@ -34,11 +36,27 @@ static int exception_handler(int_frame_t *frame)
 	__builtin_unreachable();
 }
 
+int irq_register(uint8_t vector, irq_handler_t handler)
+{
+	if (vector > 0xFE)
+		return -1;
+	irq_handlers[vector] = handler;
+	return 0;
+}
+
 void interrupt_handler(int_frame_t *frame)
 {
 	if (frame->vector < 32) {
 		if (exception_handler(frame) == 0)
 			return;
+		hcf();
+	}
+
+	irq_handler_t handler = irq_handlers[frame->vector];
+	if (handler) {
+		handler(frame);
+		apic_eoi();
+		return;
 	}
 
 	if (!warned[frame->vector]) {
@@ -48,6 +66,7 @@ void interrupt_handler(int_frame_t *frame)
 		     "unhandled interrupt vector=%lu rip=%#lx" COL_RESET,
 		     frame->vector, frame->rip);
 	}
+	apic_eoi();
 }
 
 void idt_set_descriptor(uint8_t vector, void *isr, uint8_t flags)
@@ -68,11 +87,9 @@ void idt_init()
 	idtr.base = (uintptr_t)&idt[0];
 	idtr.limit = (uint16_t)sizeof(idt_entry_t) * 256 - 1;
 
-	for (uint16_t vector = 0; vector < 256; vector++) {
+	for (uint16_t vector = 0; vector < 256; vector++)
 		idt_set_descriptor((uint8_t)vector, isr_stub_table[vector],
 				   0x8E);
-		vectors[vector] = true;
-	}
 
 	__asm__ volatile("lidt %0" : : "m"(idtr));
 	sti();

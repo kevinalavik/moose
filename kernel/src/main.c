@@ -1,16 +1,20 @@
 #include <arch/acpi.h>
+#include <arch/apic.h>
+#include <dev/device.h>
+#include <dev/platform.h>
+#include <ps2/keyboard.h>
 #include <uacpi/status.h>
 #include <limine.h>
 #include <lib/string.h>
-#include <dev/tty.h>
-#include <dev/tsc.h>
+#include <tty/tty.h>
+#include <tsc/tsc.h>
 #include <sys/moose.h>
 #include <util/printf.h>
 #include <sys/klog.h>
 #include <arch/gdt.h>
 #include <arch/cpu.h>
 #include <arch/idt.h>
-#include <dev/uart.h>
+#include <uart/uart.h>
 #include <mm/pmm.h>
 #include <lib/math.h>
 #include <term/builtin_font.h>
@@ -109,15 +113,18 @@ uintptr_t moose_hhdm_off = 0;
 uint64_t kernel_virt = 0;
 uint64_t kernel_phys = 0;
 
-handle_t com1;
-handle_t tty0;
+static device_t uart_dev;
+static device_t console_dev;
+
+static char_dev_t *com1;
+static char_dev_t *tty0;
 
 int putc(char ch)
 {
-	if (com1.dev)
-		device_write(&com1, &ch, 1);
-	if (tty0.dev)
-		device_write(&tty0, &ch, 1);
+	if (com1 && char_dev_valid(com1))
+		com1->write(com1, &ch, 1);
+	if (tty0 && char_dev_valid(tty0))
+		tty0->write(tty0, &ch, 1);
 	return 1;
 }
 
@@ -127,10 +134,11 @@ void kmain(void)
 	if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
 		hcf();
 
-	com1 = uart_init(COM1);
-	if (com1.dev == NULL)
-		klog("moose",
-		     COL_AMBER "failed to open COM1 device handle" COL_RESET);
+	uart_dev = (device_t){ .name = "ttyS0" };
+	uart_init(&uart_dev, COM1);
+	com1 = char_dev_valid(&uart_dev.chardev) ? &uart_dev.chardev : NULL;
+	if (!com1)
+		klog("moose", "failed to open COM1 device");
 
 	if (!framebuffer_request.response ||
 	    framebuffer_request.response->framebuffer_count < 1) {
@@ -154,8 +162,10 @@ void kmain(void)
 		hcf();
 	}
 
-	tty0 = console_init(moose_fb, &ttyfont, FONT_SIZE);
-	klog("moose", "using %s", device_label(&tty0));
+	console_dev = (device_t){ .name = "tty0" };
+	console_init(moose_fb, &ttyfont, FONT_SIZE, &console_dev);
+	tty0 = char_dev_valid(&console_dev.chardev) ? &console_dev.chardev :
+						      NULL;
 	tsc_init();
 
 	cred_init();
@@ -218,8 +228,6 @@ void kmain(void)
 	vma_init(&kernel_vctx, PHYS_TO_VIRT(kernel_ptable));
 	current_vctx = &kernel_vctx;
 
-	acpi_init();
-
 	superblock_t *sb = tmpfs_mount();
 	if (!sb) {
 		klog("moose", COL_BRED "failed to mount root tmpfs" COL_RESET);
@@ -235,10 +243,22 @@ void kmain(void)
 	vfs_mkdir_p(sb->s_root, "dev", S_IFDIR | 0755);
 	devfs_init();
 
-	if (device_handle_valid(&com1))
-		devfs_register("ttyS0", &com1);
-	if (device_handle_valid(&tty0))
-		devfs_register("tty0", &tty0);
+	bus_register(&platform_bus);
+
+	platform_device_add_res_io(&uart_dev, 0x3F8, 0x3FF);
+	platform_device_add_res_irq(&uart_dev, 4);
+	uart_dev.bus = &platform_bus;
+
+	console_dev.bus = &platform_bus;
+	device_register(&uart_dev);
+	device_register(&console_dev);
+
+	acpi_init();
+	apic_init();
+	acpi_platform_scan();
+	ps2kbd_init();
+	bus_probe_all();
+	device_register_chardevs();
 
 	kprintf("moose kernel v0.1.0\n");
 
@@ -250,6 +270,5 @@ void kmain(void)
 		vfs_write(out, msg, strlen(msg));
 	}
 
-	// system_shutdown();
 	hlt();
 }

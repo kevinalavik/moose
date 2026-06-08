@@ -5,9 +5,12 @@
 #include <sys/moose.h>
 #include <sys/klog.h>
 #include <arch/cpu.h>
+#include <arch/apic.h>
+#include <arch/idt.h>
 #include <mm/kheap.h>
 #include <mm/vma.h>
-#include <dev/tsc.h>
+#include <tsc/tsc.h>
+#include <pci/pci.h>
 
 uint64_t moose_rsdp = 0;
 
@@ -78,70 +81,81 @@ void uacpi_kernel_free(void *mem)
 }
 
 typedef struct {
-	uacpi_io_addr base;
-	uacpi_size len;
-} io_map_t;
+	uacpi_pci_address addr;
+} pci_handle_t;
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address,
 					  uacpi_handle *out_handle)
 {
-	(void)address;
-	*out_handle = NULL;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *h = uacpi_kernel_alloc(sizeof(pci_handle_t));
+	if (!h)
+		return UACPI_STATUS_OUT_OF_MEMORY;
+	h->addr = address;
+	*out_handle = h;
+	return UACPI_STATUS_OK;
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle)
 {
-	(void)handle;
+	uacpi_kernel_free(handle);
+}
+
+static pci_addr_t to_pci_addr(uacpi_pci_address a)
+{
+	return (pci_addr_t){
+		.segment  = a.segment,
+		.bus      = a.bus,
+		.device   = a.device,
+		.function = a.function,
+	};
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle h, uacpi_size o, uacpi_u8 *v)
 {
-	(void)h;
-	(void)o;
-	*v = 0;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	*v = pci_config_read8(to_pci_addr(ph->addr), o);
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle h, uacpi_size o, uacpi_u16 *v)
 {
-	(void)h;
-	(void)o;
-	*v = 0;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	*v = pci_config_read16(to_pci_addr(ph->addr), o);
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle h, uacpi_size o, uacpi_u32 *v)
 {
-	(void)h;
-	(void)o;
-	*v = 0;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	*v = pci_config_read32(to_pci_addr(ph->addr), o);
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle h, uacpi_size o, uacpi_u8 v)
 {
-	(void)h;
-	(void)o;
-	(void)v;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	pci_config_write8(to_pci_addr(ph->addr), o, v);
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle h, uacpi_size o, uacpi_u16 v)
 {
-	(void)h;
-	(void)o;
-	(void)v;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	pci_config_write16(to_pci_addr(ph->addr), o, v);
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle h, uacpi_size o, uacpi_u32 v)
 {
-	(void)h;
-	(void)o;
-	(void)v;
-	return UACPI_STATUS_UNIMPLEMENTED;
+	pci_handle_t *ph = h;
+	pci_config_write32(to_pci_addr(ph->addr), o, v);
+	return UACPI_STATUS_OK;
 }
+
+typedef struct {
+	uacpi_io_addr base;
+	uacpi_size len;
+} io_map_t;
 
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len,
 				 uacpi_handle *out_handle)
@@ -322,17 +336,63 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *r)
 	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
+#define MAX_UACPI_IRQ 64
+
+struct uacpi_irq_entry {
+	uint32_t gsi;
+	uint8_t vector;
+	uacpi_interrupt_handler handler;
+	uacpi_handle ctx;
+	int used;
+};
+
+static struct uacpi_irq_entry uacpi_irqs[MAX_UACPI_IRQ];
+
+static void uacpi_irq_dispatch(int_frame_t *frame)
+{
+	uint8_t vector = (uint8_t)frame->vector;
+	for (size_t i = 0; i < MAX_UACPI_IRQ; i++) {
+		struct uacpi_irq_entry *e = &uacpi_irqs[i];
+		if (e->used && e->vector == vector) {
+			e->handler(e->ctx);
+			return;
+		}
+	}
+}
+
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq,
 						    uacpi_interrupt_handler h,
 						    uacpi_handle ctx,
 						    uacpi_handle *out)
 {
-	(void)irq;
-	(void)h;
-	(void)ctx;
 	if (!out)
 		return UACPI_STATUS_INVALID_ARGUMENT;
-	*out = NULL;
+
+	size_t slot = MAX_UACPI_IRQ;
+	for (size_t i = 0; i < MAX_UACPI_IRQ; i++) {
+		if (!uacpi_irqs[i].used) {
+			slot = i;
+			break;
+		}
+	}
+	if (slot == MAX_UACPI_IRQ)
+		return UACPI_STATUS_OUT_OF_MEMORY;
+
+	uint8_t vector = IRQ_BASE + (uint8_t)irq;
+	irq_register(vector, uacpi_irq_dispatch);
+
+	uacpi_irqs[slot].gsi = irq;
+	uacpi_irqs[slot].vector = vector;
+	uacpi_irqs[slot].handler = h;
+	uacpi_irqs[slot].ctx = ctx;
+	uacpi_irqs[slot].used = 1;
+
+	apic_gsi_set_mask(irq, 0);
+
+	klog("uACPI", "installed IRQ handler: gsi=%u vector=0x%x slot=%zu",
+	     irq, vector, slot);
+
+	*out = &uacpi_irqs[slot];
 	return UACPI_STATUS_OK;
 }
 
@@ -340,7 +400,16 @@ uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler h,
 						      uacpi_handle irq_handle)
 {
 	(void)h;
-	(void)irq_handle;
+	struct uacpi_irq_entry *e = irq_handle;
+	if (!e || !e->used)
+		return UACPI_STATUS_INVALID_ARGUMENT;
+
+	apic_gsi_set_mask(e->gsi, 1);
+	irq_register(e->vector, NULL);
+	e->used = 0;
+
+	klog("uACPI", "uninstalled IRQ handler: gsi=%u vector=0x%x",
+	     e->gsi, e->vector);
 	return UACPI_STATUS_OK;
 }
 

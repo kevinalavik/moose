@@ -2,6 +2,7 @@
 #define MM_PMM_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define PAGE_SIZE 0x1000
 
@@ -18,6 +19,7 @@ typedef struct page {
 void pmm_init(void);
 
 void *pmm_alloc(void);
+void *pmm_alloc_contiguous(size_t count);
 void pmm_free(void *ptr);
 
 void pmm_ref(void *ptr);
