@@ -1,20 +1,19 @@
 #include <arch/acpi.h>
 #include <arch/apic.h>
-#include <dev/device.h>
-#include <dev/platform.h>
-#include <ps2/keyboard.h>
+#include <device/device.h>
+#include <device/platform.h>
 #include <uacpi/status.h>
 #include <limine.h>
 #include <lib/string.h>
 #include <tty/tty.h>
-#include <tsc/tsc.h>
+#include <clock/tsc.h>
 #include <sys/moose.h>
 #include <util/printf.h>
 #include <sys/klog.h>
 #include <arch/gdt.h>
 #include <arch/cpu.h>
 #include <arch/idt.h>
-#include <uart/uart.h>
+#include <serial/uart.h>
 #include <mm/pmm.h>
 #include <lib/math.h>
 #include <term/builtin_font.h>
@@ -255,10 +254,8 @@ void kmain(void)
 
 	acpi_init();
 	apic_init();
-	acpi_platform_scan();
-	ps2kbd_init();
-	bus_probe_all();
-	device_register_chardevs();
+	driver_init_all();
+	bus_rescan_devices();
 
 	kprintf("moose kernel v0.1.0\n");
 

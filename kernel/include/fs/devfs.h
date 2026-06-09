@@ -2,7 +2,7 @@
 #define FS_DEVFS_H
 
 #include <fs/vfs.h>
-#include <dev/device.h>
+#include <device/device.h>
 
 superblock_t *devfs_mount(void);
 void devfs_init(void);

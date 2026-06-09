@@ -1,0 +1,10 @@
+menu "Device Drivers"
+
+config DRIVER_I8042_KBD
+	bool "i8042 keyboard driver (PNP0303)"
+	default y
+	help
+	  IBM Enhanced (101/102-key, PS/2 mouse support) keyboard driver
+	  attached via the i8042 controller. Matches ACPI PNP0303.
+
+endmenu

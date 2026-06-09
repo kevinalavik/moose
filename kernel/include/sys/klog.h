@@ -3,7 +3,7 @@
 
 #include <util/printf.h>
 #include <term/ansi.h>
-#include <tsc/tsc.h>
+#include <clock/tsc.h>
 
 #define BLIND_MODE 0
 

@@ -5,3 +5,6 @@
 *.log
 *.cpio
 compile_commands*.json
+*.config*
+generated/
+__pycache__

@@ -15,7 +15,7 @@ ifeq ($(V),1)
 Q :=
 endif
 
-QEMUFLAGS := -m 2G -serial stdio -enable-kvm -cpu host
+QEMUFLAGS := -m 2G -serial stdio
 
 HOST_CC := cc
 HOST_CFLAGS := -g -O2 -pipe
@@ -94,6 +94,10 @@ $(INITRD_IMG): $(INITRD)
 .PHONY: kernel
 kernel: kernel/.deps-obtained
 	$(Q)$(MAKE) -C kernel
+
+.PHONY: menuconfig
+menuconfig:
+	$(Q)./scripts/menuconfig.sh
 
 $(IMAGE_NAME).iso: limine-binary/limine limine.conf kernel $(INITRD_IMG)
 	@printf "  %-7s %s\n" GEN "iso_root"
@@ -180,3 +184,4 @@ distclean:
 	$(Q)rm -f .xorriso.log .limine-build.log .limine-iso.log .limine-hdd.log
 	@printf "  %-7s %s\n" DIST "root"
 	$(Q)rm -rf limine-binary edk2-ovmf-bins
+	$(Q)rm -f .config

@@ -40,6 +40,14 @@ CPPFLAGS :=
 NASMFLAGS := -g
 LDFLAGS :=
 
+ROOT := ..
+CONFIG := $(ROOT)/.config
+CONFIG_H := include/generated/config.h
+CONFIG_MK := include/generated/config.mk
+
+$(shell mkdir -p include/generated && $(ROOT)/scripts/genmakeconfig.sh $(ROOT) $(CONFIG_MK))
+include $(CONFIG_MK)
+
 ifneq ($(filter-out clean distclean,$(or $(MAKECMDGOALS),default)),)
 ifeq ($(wildcard .deps-obtained),)
 $(error Please run the ./get-deps script first)
@@ -77,8 +85,10 @@ override CFLAGS += \
 
 override CPPFLAGS := \
 	-I include \
-	-I include/driver \
+	-I include/drivers \
+	-I ../drivers/include \
 	-I limine-protocol/include \
+	-include $(CONFIG_H) \
 	-isystem freestnd-c-hdrs/include \
 	$(CPPFLAGS) \
 	-MMD \
@@ -97,24 +107,41 @@ override LDFLAGS += \
 	--gc-sections \
 	-T linker.ld
 
-override SRCFILES := $(shell find -L src cc-runtime/src -type f 2>/dev/null | LC_ALL=C sort)
+include $(ROOT)/drivers/Makefile
+
+override SRCFILES := $(shell find -L src cc-runtime/src -type f 2>/dev/null | LC_ALL=C sort) $(DRIVER_CFILES)
 override CFILES := $(filter %.c,$(SRCFILES))
 override ASFILES := $(filter %.S,$(SRCFILES))
 override NASMFILES := $(filter %.asm,$(SRCFILES))
-override OBJ := $(addprefix obj/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o) $(NASMFILES:.asm=.asm.o))
-override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
+override OBJ := $(addprefix obj/,$(patsubst ../%,external/%,$(CFILES:.c=.c.o)) $(ASFILES:.S=.S.o) $(NASMFILES:.asm=.asm.o))
+override HEADER_DEPS := $(addprefix obj/,$(patsubst ../%,external/%,$(CFILES:.c=.c.d)) $(ASFILES:.S=.S.d))
 
 .PHONY: all
 all: bin/$(OUTPUT)
 
 -include $(HEADER_DEPS)
 
-bin/$(OUTPUT): Makefile linker.ld $(OBJ)
+CONFIG_DEPS := $(ROOT)/Kconfig $(ROOT)/drivers/Kconfig $(ROOT)/scripts/genconfig.sh $(ROOT)/scripts/genmakeconfig.sh
+ifneq ($(wildcard $(CONFIG)),)
+CONFIG_DEPS += $(CONFIG)
+endif
+
+$(CONFIG_H): $(CONFIG_DEPS)
+	$(Q)mkdir -p "$(dir $@)"
+	@printf "  %-7s %s\n" CONF "$@"
+	$(Q)$(ROOT)/scripts/genconfig.sh $(ROOT) $@
+
+bin/$(OUTPUT): Makefile linker.ld $(CONFIG_H) $(OBJ)
 	$(Q)mkdir -p "$(dir $@)"
 	@printf "  %-7s %s\n" LD "$@"
 	$(Q)$(LD) $(LDFLAGS) $(OBJ) -o $@
 
-obj/%.c.o: %.c Makefile
+obj/%.c.o: %.c Makefile $(CONFIG_H)
+	$(Q)mkdir -p "$(dir $@)"
+	@printf "  %-7s %s\n" CC "$<"
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
+
+obj/external/%.c.o: ../%.c Makefile $(CONFIG_H)
 	$(Q)mkdir -p "$(dir $@)"
 	@printf "  %-7s %s\n" CC "$<"
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@

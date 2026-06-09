@@ -1,0 +1,3 @@
+mainmenu "Moose Kernel Configuration"
+
+source "drivers/Kconfig"

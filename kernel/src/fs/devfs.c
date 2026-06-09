@@ -1,7 +1,7 @@
 #include <fs/devfs.h>
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
-#include <dev/device.h>
+#include <device/device.h>
 #include <sys/cred.h>
 #include <sys/klog.h>
 #include <mm/kheap.h>
