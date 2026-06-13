@@ -3,8 +3,8 @@
 
 #include <limine.h>
 
-#define KCONSOLE_DEFAULT_FG 0x00B4B4B4
-#define KCONSOLE_DEFAULT_BG 0x00000000
+#define KCONSOLE_DEFAULT_FG 0xD0D3D6
+#define KCONSOLE_DEFAULT_BG 0x0A0C0F
 
 void kconsole_init(struct limine_framebuffer *f);
 void kconsole_write(const char *s);

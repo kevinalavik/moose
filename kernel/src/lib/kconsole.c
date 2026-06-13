@@ -52,13 +52,18 @@ static void _cursor(uint32_t c)
 		fast_memset_row(_pixel_ptr(cx, cy + y), c, ASCII_FONT_WIDTH);
 }
 
+
 static void _scroll(void)
 {
+	uint64_t text_h = fb->height - ASCII_FONT_HEIGHT;
 	uint64_t row = (uint64_t)ASCII_FONT_HEIGHT * fb->pitch;
-	uint64_t bar_off = (uint64_t)(fb->height - ASCII_FONT_HEIGHT) * fb->pitch;
-	uint64_t copy = bar_off - row;
+	uint64_t copy = (text_h * fb->pitch) - row;
 	fast_memcpy_fwd(fb->address, (uint8_t *)fb->address + row, copy);
-	fast_memzero((uint8_t *)fb->address + copy, row);
+	uint64_t last_y = text_h - ASCII_FONT_HEIGHT;
+	for (uint64_t y = last_y; y < text_h; y++) {
+		fast_memset_row(_pixel_ptr(0, y), mapped_bg, fb->width);
+	}
+
 	if (cy >= ASCII_FONT_HEIGHT)
 		cy -= ASCII_FONT_HEIGHT;
 }
@@ -98,6 +103,11 @@ static void _drawch_xy(char ch, uint64_t x, uint64_t y)
 
 static void _drawch(char ch)
 {
+	uint64_t text_h = fb->height - ASCII_FONT_HEIGHT;
+	if (cy + ASCII_FONT_HEIGHT >= text_h) {
+		_scroll();
+	}
+
 	_drawch_xy(ch, cx, cy);
 	cx += ASCII_FONT_WIDTH;
 	if (cx + ASCII_FONT_WIDTH >= fb->width) {
@@ -105,7 +115,6 @@ static void _drawch(char ch)
 		cy += ASCII_FONT_HEIGHT;
 	}
 }
-
 void kconsole_draw_bar(void)
 {
 	if (!fb)
@@ -162,6 +171,9 @@ void kconsole_init(struct limine_framebuffer *f)
 	fb = f;
 	cx = cy = 0;
 	_refresh_mapped_colors();
+	for (uint64_t y = 0; y < fb->height; y++) {
+		fast_memset_row(_pixel_ptr(0, y), mapped_bg, fb->width);
+	}
 	kconsole_draw_bar();
 }
 
@@ -215,7 +227,7 @@ void kconsole_write(const char *s)
 			_drawch(*s++);
 		}
 
-		if (cy + ASCII_FONT_HEIGHT >= fb->height - ASCII_FONT_HEIGHT)
+		if (cy >= fb->height - ASCII_FONT_HEIGHT)
 			_scroll();
 	}
 	_cursor(mapped_cursor);
