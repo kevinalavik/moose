@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <dev/tsc.h>
 
 extern void putc(char);
 
@@ -268,6 +269,23 @@ void printk(const char *fmt, ...)
 {
 	va_list list;
 	va_start(list, fmt);
+
+	if (*fmt == PRINTK_NOTIME[0]) {
+		fmt++;
+	} else if (tsc_hz != 0) {
+		uint64_t ns = tsc_to_ns(tsc_read());
+		uint64_t secs = ns / 1000000000ULL;
+		uint64_t msecs = (ns / 1000000ULL) % 1000ULL;
+		_putc('[');
+		_printnumber(10, false, secs, 0);
+		_putc('.');
+		_printnumber(10, false, msecs, 3);
+		_putc(']');
+		_putc(' ');
+	} else {
+		_printstr("[0.000] ", 0, false);
+	}
+
 	_buf = NULL;
 	_buf_len = 0;
 	_buf_i = 0;

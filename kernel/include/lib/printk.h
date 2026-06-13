@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 /* basic printf like kernel printer */
+#define PRINTK_NOTIME "\01"
 void printk(const char *fmt, ...);
 void vprintk(const char *fmt, va_list ap);
 

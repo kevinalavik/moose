@@ -44,6 +44,8 @@ void kernel_entry(void)
 		kconsole_init(fb_request.response->framebuffers[0]);
 	}
 
+	tsc_calibrate();
+
 	printk("boot: moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
 	printk("boot: using framebuffer0 for kconsole (%dx%d)\n",
 	       fb_request.response->framebuffers[0]->width,
@@ -113,7 +115,6 @@ void kernel_entry(void)
 
 	/* init uACPI */
 	{
-		tsc_calibrate();
 		uacpi_status ret = uacpi_initialize(0);
 		if (uacpi_unlikely_error(ret)) {
 			panic(NULL, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
@@ -146,14 +147,12 @@ void kernel_entry(void)
 	apic_init();
 
 	/* we are done so just halt */
-	kconsole_set_fg(0x00FFFFFF);
 	printk("----------------------------------------------------------------\n");
-	printk("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience",
+	printk("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience\n",
 	       VER_MAJOR,
 	       VER_MINOR,
 	       VER_PATCH,
 	       VER_NOTE);
-	kconsole_set_fg(KCONSOLE_DEFAULT_FG);
-	printk("\n");
+
 	hcf();
 }

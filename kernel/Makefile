@@ -11,9 +11,9 @@ GIT_DIRTY := $(shell git -C $(GIT_ROOT) diff --quiet --ignore-submodules HEAD 2>
     if [ $$? -ne 0 ]; then echo dirty; else echo clean; fi)
 
 ifneq ($(RELEASE),1)
-    VERSION := 0.1.1-dev-$(GIT_DIRTY)-$(GIT_SHA)
+    VERSION := 0.1.2-dev-$(GIT_DIRTY)-$(GIT_SHA)
 else
-    VERSION := 0.1.1
+    VERSION := 0.1.2
 endif
 
 VER_BASE  := $(firstword $(subst -, ,$(VERSION)))
