@@ -2,9 +2,5 @@
 /edk2-ovmf-bins
 *.iso
 *.hdd
-*.log
-*.cpio
-compile_commands*.json
-*.config*
-generated/
-__pycache__
+/compile_commands.json
+/.cache

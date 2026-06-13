@@ -36,19 +36,17 @@ typedef struct int_frame {
 	uint64_t rcx;
 	uint64_t rbx;
 	uint64_t rax;
+
 	uint64_t vector;
 	uint64_t error_code;
+
 	uint64_t rip;
 	uint64_t cs;
 	uint64_t rflags;
-	/* for user mode later on iirc */
 	uint64_t rsp;
 	uint64_t ss;
 } __attribute__((packed)) int_frame_t;
 
 void idt_init(void);
 
-typedef void (*irq_handler_t)(int_frame_t *frame);
-int irq_register(uint8_t vector, irq_handler_t handler);
-
-#endif /* ARCH_IDT_H */
+#endif // ARCH_IDT_H

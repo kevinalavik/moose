@@ -19,8 +19,7 @@ typedef struct {
 } __attribute__((packed)) gdt_entry_t;
 
 typedef struct {
-	gdt_entry_t entries
-		[7]; /* null, kcode, kdata, udata, ucode, tss_low, tss_high*/
+	gdt_entry_t entries[7]; /* null, kcode, kdata, udata, ucode, tss_low, tss_high*/
 } __attribute__((packed)) gdt_t;
 
 #define GDT_ACCESS_PRESENT 0x80
@@ -36,4 +35,4 @@ typedef struct {
 
 void gdt_init();
 
-#endif /* ARCH_GDT_H */
+#endif // ARCH_GDT_H

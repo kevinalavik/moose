@@ -1,338 +1,377 @@
 #include <mm/vma.h>
-#include <sys/klog.h>
-#include <mm/kheap.h>
-#include <lib/math.h>
+#include <mm/heap.h>
+#include <mm/palloc.h>
+#include <mm/pfn.h>
+#include <arch/paging.h>
+#include <lib/printk.h>
 #include <lib/string.h>
-#include <sys/moose.h>
+#include <lib/math.h>
+#include <sys/panic.h>
 
-vctx_t *current_vctx = NULL;
+vctx_t *kernel_vctx = NULL;
 
-static vma_t *vma_alloc_node(void)
+#define VMA_DEFAULT_BASE 0xFFFF900000000000ULL
+
+static uint64_t vma_prot_to_pte_flags(uint32_t prot)
 {
-	vma_t *v = kmalloc(sizeof(vma_t));
-	if (!v)
-		klog("vma", COL_AMBER "failed to allocate vma node" COL_RESET);
+	uint64_t flags = 0;
+
+	if (prot & VMA_WRITE)
+		flags |= PTE_RW;
+
+	if (!(prot & VMA_EXEC))
+		flags |= PTE_NX;
+
+	return flags;
+}
+
+static void vma_link(vctx_t *ctx, vma_t *vma)
+{
+	vma_t *prev = NULL;
+	vma_t *cur = ctx->vma_list;
+
+	while (cur && cur->start < vma->start) {
+		prev = cur;
+		cur = cur->next;
+	}
+
+	if (prev && prev->end > vma->start)
+		panic(NULL,
+		      "vma_link: new vma [%p-%p) overlaps existing vma [%p-%p)",
+		      (void *)vma->start,
+		      (void *)vma->end,
+		      (void *)prev->start,
+		      (void *)prev->end);
+
+	if (cur && cur->start < vma->end)
+		panic(NULL,
+		      "vma_link: new vma [%p-%p) overlaps existing vma [%p-%p)",
+		      (void *)vma->start,
+		      (void *)vma->end,
+		      (void *)cur->start,
+		      (void *)cur->end);
+
+	vma->prev = prev;
+	vma->next = cur;
+
+	if (prev)
+		prev->next = vma;
 	else
-		memset(v, 0, sizeof(vma_t));
-	return v;
+		ctx->vma_list = vma;
+
+	if (cur)
+		cur->prev = vma;
 }
 
-static void vma_insert(vctx_t *ctx, vma_t *v)
+static void vma_unlink(vctx_t *ctx, vma_t *vma)
 {
-	vma_t **p = &ctx->vma_list;
-	while (*p && (*p)->start < v->start)
-		p = &(*p)->next;
+	if (ctx->vfind_hint == vma)
+		ctx->vfind_hint = NULL;
 
-	v->next = *p;
-	v->prev = NULL;
-	if (*p)
-		(*p)->prev = v;
-	*p = v;
-}
-
-static void vma_remove(vctx_t *ctx, vma_t *v)
-{
-	if (v->prev)
-		v->prev->next = v->next;
+	if (vma->prev)
+		vma->prev->next = vma->next;
 	else
-		ctx->vma_list = v->next;
+		ctx->vma_list = vma->next;
 
-	if (v->next)
-		v->next->prev = v->prev;
+	if (vma->next)
+		vma->next->prev = vma->prev;
+
+	vma->next = NULL;
+	vma->prev = NULL;
 }
 
-static int vma_overlap(vma_t *a, uint64_t start, uint64_t end)
+static void vma_release_pages(vctx_t *ctx, vma_t *vma, uintptr_t start, uintptr_t end)
 {
-	return a->start < end && a->end > start;
+	for (uintptr_t addr = start; addr < end; addr += PAGE_SIZE) {
+		uint64_t phys = ptable_virt_to_phys(ctx->ptable, addr);
+
+		if (!phys)
+			continue;
+
+		if (unmap_page(ctx->ptable, addr) != 0)
+			panic(NULL, "vma_release_pages: failed to unmap %p", (void *)addr);
+
+		if (vma->type != VMA_PHYS)
+			pfree(phys_to_page(phys));
+	}
 }
 
-static void vma_unmap_range(vctx_t *ctx, uint64_t start, uint64_t end)
+void vinit(vctx_t *ctx, ptable_t *ptable)
 {
-	for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
-		uint64_t phys = virt_to_phys(ctx->ptable, addr);
-		if (phys) {
-			unmap_page(ctx->ptable, addr);
-			pmm_free((void *)ALIGN_DOWN(phys, PAGE_SIZE));
+	if (!ctx)
+		panic(NULL, "vinit: ctx is NULL");
+
+	if (!ptable)
+		panic(NULL, "vinit: ptable is NULL");
+
+	ctx->ptable = ptable;
+	ctx->vma_list = NULL;
+	ctx->map_base = VMA_DEFAULT_BASE;
+	ctx->alloc_hint = VMA_DEFAULT_BASE;
+	ctx->vfind_hint = NULL;
+
+	printk("vma: context %p initialised (ptable=%p, map_base=%p)\n",
+	       ctx,
+	       ptable,
+	       (void *)ctx->map_base);
+}
+
+vma_t *vcreate(uintptr_t start, uintptr_t end, uint32_t prot, vmap_proto_t proto)
+{
+	if (end <= start)
+		panic(NULL, "vcreate: invalid range [%p-%p)", (void *)start, (void *)end);
+
+	if (IS_NOT_ALIGNED(start, PAGE_SIZE) || IS_NOT_ALIGNED(end, PAGE_SIZE))
+		panic(NULL, "vcreate: unaligned range [%p-%p)", (void *)start, (void *)end);
+
+	switch (proto.type) {
+	case VMA_ANON:
+		break;
+	case VMA_PHYS:
+		break;
+	default:
+		panic(NULL, "vcreate: unknown vma type %d", (int)proto.type);
+	}
+
+	vma_t *vma = kmalloc(sizeof(vma_t));
+	if (!vma)
+		panic(NULL,
+		      "vcreate: out of memory allocating vma_t for [%p-%p)",
+		      (void *)start,
+		      (void *)end);
+
+	vma->start = start;
+	vma->end = end;
+	vma->prot = prot;
+	vma->type = proto.type;
+	switch (proto.type) {
+	case VMA_ANON:
+		vma->backing.unused = NULL;
+		break;
+	case VMA_PHYS:
+		vma->backing.phys = proto.phys;
+		break;
+	}
+	vma->next = NULL;
+	vma->prev = NULL;
+	return vma;
+}
+
+void vdestroy(vctx_t *ctx, vma_t *vma)
+{
+	if (!ctx)
+		panic(NULL, "vdestroy: ctx is NULL");
+
+	if (!vma)
+		panic(NULL, "vdestroy: vma is NULL");
+
+	vma_release_pages(ctx, vma, vma->start, vma->end);
+	vma_unlink(ctx, vma);
+	kfree(vma);
+}
+
+vma_t *vfind(vctx_t *ctx, uintptr_t addr)
+{
+	if (!ctx)
+		panic(NULL, "vfind: ctx is NULL");
+
+	vma_t *vma = ctx->vfind_hint;
+	if (vma && addr >= vma->start && addr < vma->end)
+		return vma;
+
+	for (vma = ctx->vma_list; vma; vma = vma->next) {
+		if (addr >= vma->start && addr < vma->end) {
+			ctx->vfind_hint = vma;
+			return vma;
 		}
 	}
-}
 
-void vma_init(vctx_t *ctx, ptable_t *pt)
-{
-	ctx->vma_list = NULL;
-	ctx->ptable = pt;
-}
-
-vma_t *vma_find(vctx_t *ctx, uint64_t addr)
-{
-	vma_t *v = ctx->vma_list;
-	while (v) {
-		if (addr >= v->start && addr < v->end)
-			return v;
-		v = v->next;
-	}
 	return NULL;
 }
 
-int vma_map_anon(vctx_t *ctx, uint64_t addr, uint64_t size, uint32_t prot,
-		 uint32_t flags)
+static uintptr_t vmap_alloc_addr(vctx_t *ctx, size_t size)
 {
-	(void)flags; /* todo */
-	uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
-	uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
-
-	if (end <= start || end - start > 0x100000000ULL)
-		return -1;
-
-	vma_t *existing = ctx->vma_list;
-	while (existing) {
-		if (vma_overlap(existing, start, end)) {
-			klog("vma",
-			     COL_AMBER
-			     "map_anon: overlap %p-%p with %p-%p" COL_RESET,
-			     start, end, existing->start, existing->end);
-			return -1;
-		}
-		existing = existing->next;
+	uintptr_t addr = ctx->alloc_hint;
+	for (vma_t *vma = ctx->vma_list; vma; vma = vma->next) {
+		if (addr + size <= vma->start)
+			break;
+		if (addr < vma->end)
+			addr = vma->end;
 	}
 
-	vma_t *v = vma_alloc_node();
-	if (!v)
-		return -1;
+	if (addr + size < addr)
+		panic(NULL, "vmap: address space exhausted while mapping %u bytes", size);
 
-	vm_object_t *obj = kmalloc(sizeof(vm_object_t));
-	if (!obj) {
-		klog("vma", COL_AMBER "failed to allocate vm_object" COL_RESET);
-		kfree(v);
-		return -1;
-	}
-
-	obj->type = VM_OBJ_ANON;
-	v->start = start;
-	v->end = end;
-	v->prot = prot;
-	v->flags = flags;
-	v->obj = obj;
-	vma_insert(ctx, v);
-	return 0;
+	ctx->alloc_hint = addr + size;
+	return addr;
 }
 
-int vma_map_phys(vctx_t *ctx, uint64_t vaddr, uint64_t phys, uint64_t size,
-		 uint32_t prot, uint32_t flags)
+uintptr_t vmap_anon(vctx_t *ctx, size_t size)
 {
-	(void)flags; /* todo*/
-	uint64_t start = ALIGN_DOWN(vaddr, PAGE_SIZE);
-	uint64_t phys_start = ALIGN_DOWN(phys, PAGE_SIZE);
-	uint64_t end = ALIGN_UP(vaddr + size, PAGE_SIZE);
+	if (!ctx)
+		panic(NULL, "vmap_anon: ctx is NULL");
 
-	if (end <= start || end - start > 0x100000000ULL)
-		return -1;
+	if (size == 0)
+		panic(NULL, "vmap_anon: requested size is 0");
 
-	vma_t *existing = ctx->vma_list;
-	while (existing) {
-		if (vma_overlap(existing, start, end)) {
-			klog("vma",
-			     COL_AMBER
-			     "map_phys: overlap %p-%p with %p-%p" COL_RESET,
-			     start, end, existing->start, existing->end);
-			return -1;
-		}
-		existing = existing->next;
-	}
+	size = ALIGN_UP(size, PAGE_SIZE);
 
-	vma_t *v = vma_alloc_node();
-	if (!v)
-		return -1;
-
-	vm_object_t *obj = kmalloc(sizeof(vm_object_t));
-	if (!obj) {
-		klog("vma", COL_AMBER "failed to allocate vm_object" COL_RESET);
-		kfree(v);
-		return -1;
-	}
-
-	obj->type = VM_OBJ_PHYS;
-	obj->data = (void *)phys_start;
-	v->start = start;
-	v->end = end;
-	v->prot = prot;
-	v->flags = flags;
-	v->obj = obj;
-
-	uint64_t page_flags = 0;
-	if (prot & VMA_PROT_WRITE)
-		page_flags |= PTE_RW;
-	if (!(prot & VMA_PROT_EXEC))
-		page_flags |= PTE_NX;
-
-	for (uint64_t off = 0; off < (end - start); off += PAGE_SIZE) {
-		if (map_page(ctx->ptable, start + off, phys_start + off,
-			     page_flags) != 0) {
-			klog("vma",
-			     COL_AMBER
-			     "map_phys: map_page failed at %p" COL_RESET,
-			     start + off);
-			kfree(obj);
-			kfree(v);
-			return -1;
-		}
-	}
-
-	vma_insert(ctx, v);
-	return 0;
+	uintptr_t addr = vmap_alloc_addr(ctx, size);
+	vma_t *vma = vcreate(addr, addr + size, VMA_READ | VMA_WRITE, VMPROTO_ANON);
+	vma_link(ctx, vma);
+	return addr;
 }
 
-int vma_unmap(vctx_t *ctx, uint64_t addr, uint64_t size)
+uintptr_t vmap_mmio(vctx_t *ctx, uintptr_t phys, size_t size)
 {
-	uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
-	uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
+	if (!ctx)
+		panic(NULL, "vmap_mmio: ctx is NULL");
 
-	if (end <= start)
-		return -1;
+	if (size == 0)
+		panic(NULL, "vmap_mmio: requested size is 0");
 
-	vma_t *v = ctx->vma_list;
-	while (v) {
-		vma_t *next = v->next;
+	uintptr_t phys_aligned = ALIGN_DOWN(phys, PAGE_SIZE);
+	uintptr_t offset = phys - phys_aligned;
+	size_t map_size = ALIGN_UP(offset + size, PAGE_SIZE);
 
-		if (vma_overlap(v, start, end)) {
-			if (start <= v->start && end >= v->end) {
-				vma_unmap_range(ctx, v->start, v->end);
-				vma_remove(ctx, v);
-				if (v->obj)
-					kfree(v->obj);
-				kfree(v);
-			} else if (start <= v->start) {
-				vma_unmap_range(ctx, v->start, end);
-				v->start = end;
-			} else if (end >= v->end) {
-				vma_unmap_range(ctx, start, v->end);
-				v->end = start;
-			} else {
-				vma_unmap_range(ctx, start, end);
+	uintptr_t addr = vmap_alloc_addr(ctx, map_size);
+	vma_t *vma =
+	    vcreate(addr, addr + map_size, VMA_READ | VMA_WRITE, VMPROTO_PHYS(phys_aligned));
+	vma_link(ctx, vma);
 
-				vma_t *new_v = vma_alloc_node();
-				if (new_v) {
-					new_v->start = end;
-					new_v->end = v->end;
-					new_v->prot = v->prot;
-					new_v->flags = v->flags;
-
-					vm_object_t *new_obj =
-						kmalloc(sizeof(vm_object_t));
-					if (new_obj) {
-						*new_obj = *v->obj;
-						new_v->obj = new_obj;
-					} else {
-						new_v->obj = v->obj;
-					}
-
-					new_v->next = v->next;
-					new_v->prev = v;
-					if (v->next)
-						v->next->prev = new_v;
-					v->next = new_v;
-					v->end = start;
-				}
-			}
-		}
-		v = next;
+	/* pre-map all MMIO pages to avoid page faults on first access */
+	uint64_t flags = PTE_RW | PTE_NX;
+	for (size_t i = 0; i < map_size; i += PAGE_SIZE) {
+		if (map_page(ctx->ptable, addr + i, phys_aligned + i, flags) != 0)
+			panic(NULL,
+			      "vmap_mmio: failed to map %p -> %p",
+			      (void *)(addr + i),
+			      (void *)(phys_aligned + i));
 	}
 
-	return 0;
+	return addr + offset;
 }
 
-int vma_handle_fault(vctx_t *ctx, uint64_t addr, bool is_write, bool is_user)
+void vunmap(vctx_t *ctx, uintptr_t addr, size_t size)
 {
-	(void)is_user; /* no usermode yet so only placeholder for now */
-	vma_t *v = vma_find(ctx, addr);
-	if (!v)
-		return -1;
+	if (!ctx)
+		panic(NULL, "vunmap: ctx is NULL");
 
-	uint64_t fault_page = ALIGN_DOWN(addr, PAGE_SIZE);
+	if (size == 0)
+		return;
 
-	if (is_write && !(v->prot & VMA_PROT_WRITE)) {
-		klog("vma",
-		     COL_BRED
-		     "fault: write to read-only VMA %p-%p at %p" COL_RESET,
-		     v->start, v->end, addr);
-		return -1;
-	}
+	uintptr_t start = ALIGN_DOWN(addr, PAGE_SIZE);
+	uintptr_t end = ALIGN_UP(addr + size, PAGE_SIZE);
 
-	if (v->obj->type == VM_OBJ_ANON) {
-		void *phys = pmm_alloc();
-		if (!phys) {
-			klog("vma",
-			     COL_BRED
-			     "fault: OOM for anon page at %p" COL_RESET,
-			     addr);
-			return -1;
+	vma_t *vma = ctx->vma_list;
+
+	while (vma) {
+		vma_t *next = vma->next;
+		if (vma->end <= start || vma->start >= end) {
+			vma = next;
+			continue;
 		}
 
-		uint64_t page_flags = 0;
-		if (v->prot & VMA_PROT_WRITE)
-			page_flags |= PTE_RW;
-		if (!(v->prot & VMA_PROT_EXEC))
-			page_flags |= PTE_NX;
+		uintptr_t ov_start = vma->start > start ? vma->start : start;
+		uintptr_t ov_end = vma->end < end ? vma->end : end;
 
-		memset(PHYS_TO_VIRT(phys), 0, PAGE_SIZE);
-		if (map_page(ctx->ptable, fault_page, (uint64_t)phys,
-			     page_flags) != 0) {
-			klog("vma",
-			     COL_AMBER
-			     "fault: map_page failed for anon %p" COL_RESET,
-			     fault_page);
-			pmm_free(phys);
-			return -1;
+		vma_release_pages(ctx, vma, ov_start, ov_end);
+
+		if (ov_start == vma->start && ov_end == vma->end) {
+			vma_unlink(ctx, vma);
+			kfree(vma);
+		} else if (ov_start == vma->start) {
+			vma->start = ov_end;
+		} else if (ov_end == vma->end) {
+			vma->end = ov_start;
+		} else {
+			vmap_proto_t tail_proto = {.type = vma->type};
+			if (vma->type == VMA_PHYS)
+				tail_proto.phys = vma->backing.phys + (ov_end - vma->start);
+			vma_t *tail = vcreate(ov_end, vma->end, vma->prot, tail_proto);
+			vma->end = ov_start;
+			tail->prev = vma;
+			tail->next = vma->next;
+
+			if (vma->next)
+				vma->next->prev = tail;
+
+			vma->next = tail;
 		}
-	} else if (v->obj->type == VM_OBJ_PHYS) {
-		klog("vma",
-		     COL_BRED
-		     "fault: unexpected fault in phys VMA %p-%p at %p" COL_RESET,
-		     v->start, v->end, addr);
-		return -1;
-	}
 
-	return 0;
+		vma = next;
+	}
 }
 
-#define IOREMAP_BASE 0xFFFFFFFFC0000000ULL
-static uint64_t ioremap_cur = IOREMAP_BASE;
-
-void *vma_ioremap(vctx_t *ctx, uint64_t phys, uint64_t size, uint32_t prot)
+int vfault(vctx_t *ctx, uintptr_t addr, uint32_t access_flags)
 {
-	uint64_t phys_page = ALIGN_DOWN(phys, PAGE_SIZE);
-	uint64_t offset = phys - phys_page;
-	uint64_t map_size = ALIGN_UP(size + offset, PAGE_SIZE);
+	if (!ctx)
+		panic(NULL, "vfault: ctx is NULL");
 
-	uint64_t vaddr = ioremap_cur;
-	ioremap_cur += map_size;
-
-	if (vma_map_phys(ctx, vaddr, phys_page, map_size, prot, 0) != 0)
-		return NULL;
-
-	return (void *)(vaddr + offset);
-}
-
-int vma_iounmap(vctx_t *ctx, void *vaddr, uint64_t size)
-{
-	uint64_t addr = (uint64_t)vaddr;
-	uint64_t page = ALIGN_DOWN(addr, PAGE_SIZE);
-	uint64_t offset = addr - page;
-	uint64_t map_size = ALIGN_UP(size + offset, PAGE_SIZE);
-
-	vma_t *v = ctx->vma_list;
-	while (v) {
-		if (v->start == page) {
-			for (uint64_t off = 0; off < map_size; off += PAGE_SIZE)
-				unmap_page(ctx->ptable, page + off);
-
-			vma_remove(ctx, v);
-			if (v->obj)
-				kfree(v->obj);
-			kfree(v);
-			return 0;
-		}
-		v = v->next;
+	vma_t *vma = vfind(ctx, addr);
+	if (!vma) {
+		printk("vma: fault at %p: no vma covers this address\n", (void *)addr);
+		return -1;
 	}
+
+	if ((access_flags & VMA_WRITE) && !(vma->prot & VMA_WRITE)) {
+		printk("vma: fault at %p: write access denied (vma prot=0x%x)\n",
+		       (void *)addr,
+		       vma->prot);
+		return -1;
+	}
+
+	if ((access_flags & VMA_EXEC) && !(vma->prot & VMA_EXEC)) {
+		printk("vma: fault at %p: exec access denied (vma prot=0x%x)\n",
+		       (void *)addr,
+		       vma->prot);
+		return -1;
+	}
+
+	uintptr_t page_addr = ALIGN_DOWN(addr, PAGE_SIZE);
+	if (ptable_virt_to_phys(ctx->ptable, page_addr) != 0)
+		return 0;
+
+	switch (vma->type) {
+	case VMA_ANON: {
+		page_t *page = palloc();
+		if (!page)
+			panic(NULL,
+			      "vfault: out of physical memory servicing fault at %p",
+			      (void *)addr);
+
+		uint64_t phys = page_to_phys(page);
+		memset(phys_to_virt(phys), 0, PAGE_SIZE);
+
+		uint64_t flags = vma_prot_to_pte_flags(vma->prot);
+
+		if (map_page(ctx->ptable, page_addr, phys, flags) != 0) {
+			pfree(page);
+			panic(NULL,
+			      "vfault: failed to map page %p -> %p",
+			      (void *)page_addr,
+			      (void *)phys);
+		}
+		return 0;
+	}
+	case VMA_PHYS: {
+		uint64_t phys = vma->backing.phys + (page_addr - vma->start);
+		uint64_t flags = vma_prot_to_pte_flags(vma->prot);
+
+		if (map_page(ctx->ptable, page_addr, phys, flags) != 0)
+			panic(NULL,
+			      "vfault: failed to map %p -> %p",
+			      (void *)page_addr,
+			      (void *)phys);
+		return 0;
+	}
+	default:
+		panic(NULL,
+		      "vfault: vma [%p-%p) has unhandled type %d",
+		      (void *)vma->start,
+		      (void *)vma->end,
+		      (int)vma->type);
+	}
+
 	return -1;
 }

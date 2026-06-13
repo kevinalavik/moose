@@ -2,50 +2,64 @@
 #define MM_VMA_H
 
 #include <stdint.h>
-#include <stdbool.h>
+#include <stddef.h>
+
+#include <mm/pfn.h>
+#include <mm/palloc.h>
 #include <arch/paging.h>
-#include <mm/pmm.h>
 
-#define VMA_PROT_READ (1 << 0)
-#define VMA_PROT_WRITE (1 << 1)
-#define VMA_PROT_EXEC (1 << 2)
+#define VMA_READ (1u << 0)
+#define VMA_WRITE (1u << 1)
+#define VMA_EXEC (1u << 2)
 
-typedef enum { VM_OBJ_ANON = 0, VM_OBJ_PHYS } vm_object_type_t;
+typedef enum {
+	VMA_ANON = 0,
+	VMA_PHYS,
+} vma_type_t;
 
-typedef struct vm_object {
-	vm_object_type_t type;
-	void *data;
-} vm_object_t;
+typedef struct vmap_proto {
+	vma_type_t type;
+	uintptr_t phys;
+} vmap_proto_t;
+
+#define VMPROTO_ANON ((vmap_proto_t){.type = VMA_ANON, .phys = 0})
+#define VMPROTO_PHYS(addr) ((vmap_proto_t){.type = VMA_PHYS, .phys = (addr)})
 
 typedef struct vma {
-	uint64_t start;
-	uint64_t end;
+	uintptr_t start;
+	uintptr_t end; /* exclusive */
 
-	uint32_t prot; /* VMA_PROTs */
-	uint32_t flags; /* todo */
+	uint32_t prot;
+	vma_type_t type;
 
-	vm_object_t *obj;
+	union vma_backing {
+		void *unused;
+		uintptr_t phys;
+	} backing;
 
 	struct vma *next;
 	struct vma *prev;
-} vma_t; /* virtual memory areas */
 
-typedef struct vctx {
-	vma_t *vma_list;
+} vma_t;
+
+typedef struct {
 	ptable_t *ptable;
-} vctx_t; /* per process context */
+	vma_t *vma_list;
+	uintptr_t map_base;
+	uintptr_t alloc_hint;
+	vma_t *vfind_hint;
+} vctx_t;
 
-void vma_init(vctx_t *ctx, ptable_t *pt);
-vma_t *vma_find(vctx_t *ctx, uint64_t addr);
-int vma_map_anon(vctx_t *ctx, uint64_t addr, uint64_t size, uint32_t prot,
-		 uint32_t flags);
-int vma_map_phys(vctx_t *ctx, uint64_t vaddr, uint64_t phys, uint64_t size,
-		 uint32_t prot, uint32_t flags);
-int vma_unmap(vctx_t *ctx, uint64_t addr, uint64_t size);
-int vma_handle_fault(vctx_t *ctx, uint64_t addr, bool is_write, bool is_user);
-void *vma_ioremap(vctx_t *ctx, uint64_t phys, uint64_t size, uint32_t prot);
-int vma_iounmap(vctx_t *ctx, void *vaddr, uint64_t size);
 
-extern vctx_t *current_vctx;
+void vinit(vctx_t *ctx, ptable_t *ptable);
+vma_t *vcreate(uintptr_t start, uintptr_t end, uint32_t prot, vmap_proto_t proto);
+void vdestroy(vctx_t *ctx, vma_t *vma);
+vma_t *vfind(vctx_t *ctx, uintptr_t addr);
+uintptr_t vmap_anon(vctx_t *ctx, size_t size);
+uintptr_t vmap_mmio(vctx_t *ctx, uintptr_t phys, size_t size);
+void vunmap(vctx_t *ctx, uintptr_t addr, size_t size);
+int vfault(vctx_t *ctx, uintptr_t addr, uint32_t access_flags);
 
-#endif /* MM_VMA_H */
+extern vctx_t *kernel_vctx;
+
+#endif // MM_VMA_H

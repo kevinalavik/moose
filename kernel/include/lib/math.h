@@ -2,7 +2,7 @@
 #define LIB_MATH_H
 
 #include <stdint.h>
-#include <util/printf.h>
+#include <lib/printk.h>
 
 /* math utils for moose kernel :^() */
 #define ALIGN_UP(x, y) (((x) + ((y) - 1)) & ~((y) - 1))
@@ -16,7 +16,7 @@ static inline const char *size_to_str(uint64_t bytes)
 	static int idx = 0;
 	char *buf = bufs[idx++ & 3];
 
-	static const char *units[] = { "B", "KiB", "MiB", "GiB", "TiB", "PiB" };
+	static const char *units[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"};
 
 	uint64_t value = bytes;
 	uint64_t rem = 0;
@@ -31,11 +31,11 @@ static inline const char *size_to_str(uint64_t bytes)
 	uint64_t frac = (rem * 100) >> 10;
 
 	if (unit == 0)
-		ksnprintf(buf, 64, "%llu %s", value, units[unit]);
+		snprintk(buf, 64, "%llu %s", value, units[unit]);
 	else
-		ksnprintf(buf, 64, "%llu.%02llu %s", value, frac, units[unit]);
+		snprintk(buf, 64, "%llu.%02llu %s", value, frac, units[unit]);
 
 	return buf;
 }
 
-#endif /* LIB_MATH_H */
+#endif // LIB_MATH_H

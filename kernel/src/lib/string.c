@@ -1,171 +1,79 @@
 #include <lib/string.h>
 #include <stdint.h>
+#include <arch/fastmem.h>
 
-void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+void *memcpy(void *dst, const void *src, size_t n)
 {
-	uint64_t *restrict d64 = (uint64_t *restrict)dst;
-	const uint64_t *restrict s64 = (const uint64_t *restrict)src;
-
-	size_t n64 = n / 8;
-	for (size_t i = 0; i < n64; i++)
-		d64[i] = s64[i];
-
-	for (size_t i = n64 * 8; i < n; i++)
-		((uint8_t *)dst)[i] = ((const uint8_t *)src)[i];
-
+	fast_memcpy_fwd(dst, src, n);
 	return dst;
 }
 
-void *memset(void *dst, int c, size_t n)
+void *memset(void *s, int c, size_t n)
 {
-	uint64_t pat = (uint8_t)c;
-	pat |= pat << 8;
-	pat |= pat << 16;
-	pat |= pat << 32;
+	fast_memset(s, (uint8_t)c, n);
+	return s;
+}
 
-	uint64_t *d64 = (uint64_t *)dst;
-	size_t n64 = n / 8;
-	for (size_t i = 0; i < n64; i++)
-		d64[i] = pat;
-
-	for (size_t i = n64 * 8; i < n; i++)
-		((uint8_t *)dst)[i] = (uint8_t)c;
-
-	return dst;
+int memcmp(const void *a, const void *b, size_t n)
+{
+	return fast_memcmp(a, b, n);
 }
 
 void *memmove(void *dst, const void *src, size_t n)
 {
-	uint8_t *d = dst;
-	const uint8_t *s = src;
+	uint8_t *d = (uint8_t *)dst;
+	const uint8_t *s = (const uint8_t *)src;
 
 	if (d == s || n == 0)
 		return dst;
 
-	if ((uintptr_t)s > (uintptr_t)d) {
-		uint64_t *d64 = (uint64_t *)d;
-		const uint64_t *s64 = (const uint64_t *)s;
-		size_t n64 = n / 8;
-		for (size_t i = 0; i < n64; i++)
-			d64[i] = s64[i];
-		for (size_t i = n64 * 8; i < n; i++)
-			d[i] = s[i];
+	if (d < s) {
+		fast_memcpy_fwd(dst, src, n);
 	} else {
-		uint8_t *d8 = d + n;
-		const uint8_t *s8 = s + n;
-		while (n >= 8) {
-			d8 -= 8;
-			s8 -= 8;
-			*(uint64_t *)d8 = *(const uint64_t *)s8;
-			n -= 8;
-		}
-		while (n--) {
-			d8--;
-			s8--;
-			*d8 = *s8;
-		}
+		for (size_t i = n; i > 0; i--)
+			d[i - 1] = s[i - 1];
 	}
 
 	return dst;
 }
 
-int memcmp(const void *a_, const void *b_, size_t n)
-{
-	const uint64_t *a64 = (const uint64_t *)a_;
-	const uint64_t *b64 = (const uint64_t *)b_;
-
-	size_t n64 = n / 8;
-	for (size_t i = 0; i < n64; i++) {
-		if (a64[i] != b64[i]) {
-			const uint8_t *a8 = (const uint8_t *)&a64[i];
-			const uint8_t *b8 = (const uint8_t *)&b64[i];
-			for (size_t j = 0; j < 8; j++) {
-				if (a8[j] != b8[j])
-					return a8[j] < b8[j] ? -1 : 1;
-			}
-		}
-	}
-
-	for (size_t i = n64 * 8; i < n; i++) {
-		const uint8_t *a8 = (const uint8_t *)a_;
-		const uint8_t *b8 = (const uint8_t *)b_;
-		if (a8[i] != b8[i])
-			return a8[i] < b8[i] ? -1 : 1;
-	}
-
-	return 0;
-}
-
 size_t strlen(const char *s)
 {
-	size_t len = 0;
-
-	while (s[len])
-		len++;
-
-	return len;
+	size_t i = 0;
+	while (s[i])
+		i++;
+	return i;
 }
 
-int strcmp(const char *a, const char *b)
-{
-	while (*a && *a == *b) {
-		a++;
-		b++;
-	}
-
-	return (unsigned char)*a - (unsigned char)*b;
-}
-
-int strncmp(const char *a, const char *b, size_t n)
-{
-	while (n && *a && (*a == *b)) {
-		a++;
-		b++;
-		n--;
-	}
-
-	if (n == 0)
-		return 0;
-
-	return (unsigned char)*a - (unsigned char)*b;
-}
-
-char *strcpy(char *restrict dst, const char *restrict src)
+char *strcpy(char *dst, const char *src)
 {
 	char *ret = dst;
 
-	while ((*dst++ = *src++))
+	while ((*dst++ = *src++) != '\0')
 		;
 
 	return ret;
 }
 
-char *strncpy(char *restrict dst, const char *restrict src, size_t n)
+char *strncpy(char *dst, const char *src, size_t n)
 {
-	char *ret = dst;
+	size_t i = 0;
 
-	while (n && *src) {
-		*dst++ = *src++;
-		n--;
-	}
+	for (; i < n && src[i]; i++)
+		dst[i] = src[i];
 
-	while (n) {
-		*dst++ = '\0';
-		n--;
-	}
+	for (; i < n; i++)
+		dst[i] = '\0';
 
-	return ret;
+	return dst;
 }
 
-char *strrchr(const char *s, int c)
+int strcmp(const char *a, const char *b)
 {
-	const char *last = NULL;
-
-	while (*s) {
-		if (*s == (char)c)
-			last = s;
-		s++;
+	while (*a && (*a == *b)) {
+		a++;
+		b++;
 	}
 
-	return (char *)last;
+	return (unsigned char)(*a) - (unsigned char)(*b);
 }

@@ -24,11 +24,13 @@ typedef struct {
 
 extern ptable_t *kernel_ptable;
 
-uint64_t virt_to_phys(ptable_t *pml4, uint64_t vaddr);
-int map_page(ptable_t *pml4, uint64_t vaddr, uint64_t paddr,
-	     uint64_t flags); /* doesnt need PRESENT flag */
+uint64_t ptable_virt_to_phys(ptable_t *pml4, uint64_t vaddr);
+int map_page(ptable_t *pml4,
+             uint64_t vaddr,
+             uint64_t paddr,
+             uint64_t flags); /* doesnt need PRESENT flag */
 int unmap_page(ptable_t *pml4, uint64_t vaddr);
 void paging_init();
 ptable_t *ptable_create();
 
-#endif /* ARCH_PAGING_H */
+#endif // ARCH_PAGING_H
