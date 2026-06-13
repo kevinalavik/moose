@@ -146,7 +146,7 @@ clean:
 
 .PHONY: distclean
 distclean: clean
-	rm -rf .deps-obtained .cache compile_commands.json freestnd-c-hdrs cc-runtime limine-protocol
+	rm -rf .deps-obtained .cache compile_commands.json freestnd-c-hdrs cc-runtime limine-protocol uACPI
 
 .PHONY: install
 install: all
