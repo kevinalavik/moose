@@ -16,6 +16,8 @@
 #include <uacpi/uacpi.h>
 #include <uacpi/utilities.h>
 #include <uacpi/event.h>
+#include <uacpi/resources.h>
+#include <uacpi/namespace.h>
 #include <dev/tsc.h>
 #include <dev/pci.h>
 #include <sys/apic.h>

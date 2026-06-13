@@ -27,7 +27,26 @@ static inline void sti()
 	__asm__ volatile("sti");
 }
 
+#define RFLAGS_IF (1 << 9)
+static inline uint64_t read_flags()
+{
+	uint64_t flags;
+	__asm__ volatile("pushfq\n\t"
+	                 "popq %0"
+	                 : "=r"(flags)
+	                 :
+	                 : "memory");
+	return flags;
+}
 
+static inline void write_flags(uint64_t flags)
+{
+	__asm__ volatile("pushq %0\n\t"
+	                 "popfq"
+	                 :
+	                 : "r"(flags)
+	                 : "memory", "cc");
+}
 static inline uint64_t read_cr2(void)
 {
 	uint64_t cr2;
@@ -151,7 +170,7 @@ static inline uint64_t rdtsc(void)
 static inline uint64_t rdtsc_ordered(void)
 {
 	uint32_t lo, hi;
-	__asm__ volatile("lfence; rdtsc" : "=a"(lo), "=d"(hi) :: "memory");
+	__asm__ volatile("lfence; rdtsc" : "=a"(lo), "=d"(hi)::"memory");
 	return ((uint64_t)hi << 32) | lo;
 }
 

@@ -1,3 +1,4 @@
+#include <arch/cpu.h>
 #include <uacpi/log.h>
 #include <uacpi/kernel_api.h>
 #include <lib/printk.h>
@@ -347,4 +348,17 @@ uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler handler, uac
 uacpi_status uacpi_kernel_wait_for_work_completion(void)
 {
 	return UACPI_STATUS_UNIMPLEMENTED;
+}
+
+uacpi_interrupt_state uacpi_kernel_disable_interrupts(void)
+{
+	uacpi_interrupt_state flags = read_flags();
+	cli();
+	return flags & RFLAGS_IF;
+}
+
+void uacpi_kernel_restore_interrupts(uacpi_interrupt_state state)
+{
+	if (state & RFLAGS_IF)
+		sti();
 }
