@@ -11,6 +11,7 @@
 #define CPUID_BRAND1 0x80000003
 #define CPUID_BRAND2 0x80000004
 
+#define CPUID_FEAT_EDX_APIC (1 << 9)
 
 static inline void
 cpuid(uint32_t leaf, uint32_t subleaf, uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)

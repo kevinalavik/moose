@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <lib/printk.h>
 #include <sys/panic.h>
+#include <sys/irq.h>
+#include <sys/apic.h>
 
 __attribute__((aligned(16))) static idt_entry_t idt[256];
 static idtr_t idtr;
@@ -20,6 +22,10 @@ void interrupt_handler(int_frame_t *frame)
 	cli();
 	if (frame->vector < 32) {
 		exception_handler(frame);
+		return;
+	}
+	if (frame->vector >= IRQ_VECTOR_BASE && frame->vector < IRQ_VECTOR_BASE + IRQ_COUNT) {
+		irq_dispatch(frame);
 		return;
 	}
 	printk("sys: unhandled interrupt vector=%u rip=%p\n", frame->vector, (void *)frame->rip);

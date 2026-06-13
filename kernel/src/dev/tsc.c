@@ -35,7 +35,7 @@ static void set_cyc2ns_scale(uint64_t khz)
 {
 	uint32_t mul, shift, s;
 	uint64_t tsc_now = rdtsc();
-	uint64_t ns_now = tsc_now * 1000000000ULL / (khz * KHZ);
+	uint64_t ns_now = (uint64_t)((__uint128_t)tsc_now * 1000000000ULL / (khz * KHZ));
 
 	for (s = 32; s > 0; s--) {
 		uint64_t tmp = (1000000ULL << s) / khz;
@@ -53,7 +53,7 @@ done:
 		mul >>= 1;
 	}
 
-	cyc2ns.offset = ns_now - ((tsc_now * mul) >> shift);
+	cyc2ns.offset = ns_now - (uint64_t)(((__uint128_t)tsc_now * mul) >> shift);
 	cyc2ns.mul = mul;
 	cyc2ns.shift = shift;
 }
@@ -368,6 +368,6 @@ uint64_t tsc_read(void)
 uint64_t tsc_to_ns(uint64_t tsc)
 {
 	uint64_t ns = cyc2ns.offset;
-	ns += ((uint64_t)tsc * cyc2ns.mul) >> cyc2ns.shift;
+	ns += (uint64_t)(((__uint128_t)tsc * cyc2ns.mul) >> cyc2ns.shift);
 	return ns;
 }

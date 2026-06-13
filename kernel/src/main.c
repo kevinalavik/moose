@@ -21,6 +21,7 @@
 #include <dev/tsc.h>
 #include <dev/pci.h>
 #include <sys/apic.h>
+#include <dev/pit.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
@@ -148,7 +149,10 @@ void kernel_entry(void)
 	/* setup apic */
 	apic_init();
 
-	/* we are done so just halt */
+	/* setup pit timer */
+	pit_init();
+
+
 	printk("----------------------------------------------------------------\n");
 	printk("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience\n",
 	       VER_MAJOR,
@@ -156,5 +160,7 @@ void kernel_entry(void)
 	       VER_PATCH,
 	       VER_NOTE);
 
+	/* enable interrupts and halt */
+	sti();
 	hcf();
 }
