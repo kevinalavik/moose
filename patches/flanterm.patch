@@ -1,0 +1,362 @@
+diff --git a/src/flanterm_backends/fb.c b/src/flanterm_backends/fb.c
+index 142105b..ed0b0fa 100644
+--- a/src/flanterm_backends/fb.c
++++ b/src/flanterm_backends/fb.c
+@@ -68,6 +68,14 @@ static bool mul_size_overflow(size_t a, size_t b, size_t *out) {
+     return false;
+ }
+ 
++static ALWAYS_INLINE uint32_t alpha_blend(uint32_t fg, uint32_t bg, uint8_t a) {
++    uint32_t ia = 255 - a;
++    uint32_t r = ((fg >> 16 & 0xFF) * a + (bg >> 16 & 0xFF) * ia) / 255;
++    uint32_t g = ((fg >> 8  & 0xFF) * a + (bg >> 8  & 0xFF) * ia) / 255;
++    uint32_t b = ((fg       & 0xFF) * a + (bg       & 0xFF) * ia) / 255;
++    return (r << 16) | (g << 8) | b;
++}
++
+ #ifndef FLANTERM_FB_DISABLE_BUMP_ALLOC
+ 
+ #ifndef FLANTERM_FB_BUMP_ALLOC_POOL_SIZE
+@@ -580,7 +588,15 @@ static void plot_char_scaled_canvas(struct flanterm_context *_ctx, struct flante
+     x = ctx->offset_x + x * ctx->glyph_width;
+     y = ctx->offset_y + y * ctx->glyph_height;
+ 
+-    bool *glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    size_t alpha_stride = ctx->font_width - ctx->font_spacing;
++    uint8_t *alpha = ctx->font_alpha;
++    if (alpha != NULL) {
++        alpha = &ctx->font_alpha[c->c * ctx->font_height * alpha_stride];
++    }
++    bool *glyph = NULL;
++    if (alpha == NULL) {
++        glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    }
+ 
+     volatile uint32_t *dest;
+     int outer_stride, inner_stride;
+@@ -613,17 +629,31 @@ static void plot_char_scaled_canvas(struct flanterm_context *_ctx, struct flante
+     for (size_t gy = 0; gy < ctx->glyph_height; gy++) {
+         uint8_t fy = gy / ctx->font_scale_y;
+         volatile uint32_t *fb_line = dest;
+-        uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
+-        bool *glyph_pointer = glyph + (fy * ctx->font_width);
+-        for (size_t fx = 0; fx < ctx->font_width; fx++) {
+-            for (size_t i = 0; i < ctx->font_scale_x; i++) {
+-                size_t gx = ctx->font_scale_x * fx + i;
+-                uint32_t bg = c->bg_default ? canvas_line[gx] : c->bg;
+-                uint32_t fg = c->fg_default ? canvas_line[gx] : c->fg;
+-                *fb_line = *glyph_pointer ? fg : bg;
+-                fb_line += inner_stride;
++        if (alpha != NULL) {
++            uint8_t *alpha_pointer = alpha + (fy * alpha_stride);
++            uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
++            for (size_t fx = 0; fx < alpha_stride; fx++) {
++                for (size_t i = 0; i < ctx->font_scale_x; i++) {
++                    size_t gx = ctx->font_scale_x * fx + i;
++                    uint32_t bg = c->bg_default ? canvas_line[gx] : c->bg;
++                    uint32_t fg = c->fg_default ? canvas_line[gx] : c->fg;
++                    *fb_line = alpha_blend(fg, bg, *(alpha_pointer++));
++                    fb_line += inner_stride;
++                }
++            }
++        } else {
++            bool *glyph_pointer = glyph + (fy * ctx->font_width);
++            uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
++            for (size_t fx = 0; fx < ctx->font_width; fx++) {
++                for (size_t i = 0; i < ctx->font_scale_x; i++) {
++                    size_t gx = ctx->font_scale_x * fx + i;
++                    uint32_t bg = c->bg_default ? canvas_line[gx] : c->bg;
++                    uint32_t fg = c->fg_default ? canvas_line[gx] : c->fg;
++                    *fb_line = *glyph_pointer ? fg : bg;
++                    fb_line += inner_stride;
++                }
++                glyph_pointer++;
+             }
+-            glyph_pointer++;
+         }
+         dest += outer_stride;
+     }
+@@ -644,7 +674,15 @@ static void plot_char_scaled_uncanvas(struct flanterm_context *_ctx, struct flan
+     x = ctx->offset_x + x * ctx->glyph_width;
+     y = ctx->offset_y + y * ctx->glyph_height;
+ 
+-    bool *glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    size_t alpha_stride = ctx->font_width - ctx->font_spacing;
++    uint8_t *alpha = ctx->font_alpha;
++    if (alpha != NULL) {
++        alpha = &ctx->font_alpha[c->c * ctx->font_height * alpha_stride];
++    }
++    bool *glyph = NULL;
++    if (alpha == NULL) {
++        glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    }
+ 
+     volatile uint32_t *dest;
+     int outer_stride, inner_stride;
+@@ -677,13 +715,23 @@ static void plot_char_scaled_uncanvas(struct flanterm_context *_ctx, struct flan
+     for (size_t gy = 0; gy < ctx->glyph_height; gy++) {
+         uint8_t fy = gy / ctx->font_scale_y;
+         volatile uint32_t *fb_line = dest;
+-        bool *glyph_pointer = glyph + (fy * ctx->font_width);
+-        for (size_t fx = 0; fx < ctx->font_width; fx++) {
+-            for (size_t i = 0; i < ctx->font_scale_x; i++) {
+-                *fb_line = *glyph_pointer ? fg : bg;
+-                fb_line += inner_stride;
++        if (alpha != NULL) {
++            uint8_t *alpha_pointer = alpha + (fy * alpha_stride);
++            for (size_t fx = 0; fx < alpha_stride; fx++) {
++                for (size_t i = 0; i < ctx->font_scale_x; i++) {
++                    *fb_line = alpha_blend(fg, bg, *(alpha_pointer++));
++                    fb_line += inner_stride;
++                }
++            }
++        } else {
++            bool *glyph_pointer = glyph + (fy * ctx->font_width);
++            for (size_t fx = 0; fx < ctx->font_width; fx++) {
++                for (size_t i = 0; i < ctx->font_scale_x; i++) {
++                    *fb_line = *glyph_pointer ? fg : bg;
++                    fb_line += inner_stride;
++                }
++                glyph_pointer++;
+             }
+-            glyph_pointer++;
+         }
+         dest += outer_stride;
+     }
+@@ -699,7 +747,15 @@ static void plot_char_unscaled_canvas(struct flanterm_context *_ctx, struct flan
+     x = ctx->offset_x + x * ctx->glyph_width;
+     y = ctx->offset_y + y * ctx->glyph_height;
+ 
+-    bool *glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    size_t alpha_stride = ctx->font_width - ctx->font_spacing;
++    uint8_t *alpha = ctx->font_alpha;
++    if (alpha != NULL) {
++        alpha = &ctx->font_alpha[c->c * ctx->font_height * alpha_stride];
++    }
++    bool *glyph = NULL;
++    if (alpha == NULL) {
++        glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    }
+ 
+     volatile uint32_t *dest;
+     int outer_stride, inner_stride;
+@@ -731,13 +787,24 @@ static void plot_char_unscaled_canvas(struct flanterm_context *_ctx, struct flan
+     // naming: fx,fy for font coordinates, gx,gy for glyph coordinates
+     for (size_t gy = 0; gy < ctx->glyph_height; gy++) {
+         volatile uint32_t *fb_line = dest;
+-        uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
+-        bool *glyph_pointer = glyph + (gy * ctx->font_width);
+-        for (size_t fx = 0; fx < ctx->font_width; fx++) {
+-            uint32_t bg = c->bg_default ? canvas_line[fx] : c->bg;
+-            uint32_t fg = c->fg_default ? canvas_line[fx] : c->fg;
+-            *fb_line = *(glyph_pointer++) ? fg : bg;
+-            fb_line += inner_stride;
++        if (alpha != NULL) {
++            uint8_t *alpha_pointer = alpha + (gy * alpha_stride);
++            uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
++            for (size_t fx = 0; fx < alpha_stride; fx++) {
++                uint32_t bg = c->bg_default ? canvas_line[fx] : c->bg;
++                uint32_t fg = c->fg_default ? canvas_line[fx] : c->fg;
++                *fb_line = alpha_blend(fg, bg, *(alpha_pointer++));
++                fb_line += inner_stride;
++            }
++        } else {
++            bool *glyph_pointer = glyph + (gy * ctx->font_width);
++            uint32_t *canvas_line = ctx->canvas + x + (y + gy) * ctx->width;
++            for (size_t fx = 0; fx < ctx->font_width; fx++) {
++                uint32_t bg = c->bg_default ? canvas_line[fx] : c->bg;
++                uint32_t fg = c->fg_default ? canvas_line[fx] : c->fg;
++                *fb_line = *(glyph_pointer++) ? fg : bg;
++                fb_line += inner_stride;
++            }
+         }
+         dest += outer_stride;
+     }
+@@ -758,7 +825,15 @@ static void plot_char_unscaled_uncanvas(struct flanterm_context *_ctx, struct fl
+     x = ctx->offset_x + x * ctx->glyph_width;
+     y = ctx->offset_y + y * ctx->glyph_height;
+ 
+-    bool *glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    size_t alpha_stride = ctx->font_width - ctx->font_spacing;
++    uint8_t *alpha = ctx->font_alpha;
++    if (alpha != NULL) {
++        alpha = &ctx->font_alpha[c->c * ctx->font_height * alpha_stride];
++    }
++    bool *glyph = NULL;
++    if (alpha == NULL) {
++        glyph = &ctx->font_bool[c->c * ctx->font_height * ctx->font_width];
++    }
+ 
+     volatile uint32_t *dest;
+     int outer_stride, inner_stride;
+@@ -790,10 +865,18 @@ static void plot_char_unscaled_uncanvas(struct flanterm_context *_ctx, struct fl
+     // naming: fx,fy for font coordinates, gx,gy for glyph coordinates
+     for (size_t gy = 0; gy < ctx->glyph_height; gy++) {
+         volatile uint32_t *fb_line = dest;
+-        bool *glyph_pointer = glyph + (gy * ctx->font_width);
+-        for (size_t fx = 0; fx < ctx->font_width; fx++) {
+-            *fb_line = *(glyph_pointer++) ? fg : bg;
+-            fb_line += inner_stride;
++        if (alpha != NULL) {
++            uint8_t *alpha_pointer = alpha + (gy * alpha_stride);
++            for (size_t fx = 0; fx < alpha_stride; fx++) {
++                *fb_line = alpha_blend(fg, bg, *(alpha_pointer++));
++                fb_line += inner_stride;
++            }
++        } else {
++            bool *glyph_pointer = glyph + (gy * ctx->font_width);
++            for (size_t fx = 0; fx < ctx->font_width; fx++) {
++                *fb_line = *(glyph_pointer++) ? fg : bg;
++                fb_line += inner_stride;
++            }
+         }
+         dest += outer_stride;
+     }
+@@ -1188,8 +1271,15 @@ static void flanterm_fb_deinit(struct flanterm_context *_ctx, void (*_free)(void
+         return;
+     }
+ 
+-    _free(ctx->font_bits, ctx->font_bits_size);
+-    _free(ctx->font_bool, ctx->font_bool_size);
++    if (ctx->font_bits != NULL) {
++        _free(ctx->font_bits, ctx->font_bits_size);
++    }
++    if (ctx->font_bool != NULL) {
++        _free(ctx->font_bool, ctx->font_bool_size);
++    }
++    if (ctx->font_alpha != NULL) {
++        _free(ctx->font_alpha, ctx->font_alpha_size);
++    }
+     _free(ctx->grid, ctx->grid_size);
+     _free(ctx->queue, ctx->queue_size);
+     _free(ctx->map, ctx->map_size);
+@@ -1399,14 +1489,17 @@ struct flanterm_context *flanterm_fb_init(
+     if (font != NULL) {
+         ctx->font_width = font_width;
+         ctx->font_height = font_height;
+-        if (mul_size_overflow(font_height, (size_t)FLANTERM_FB_FONT_GLYPHS, &ctx->font_bits_size)) {
++        ctx->font_spacing = font_spacing;
++
++        if (mul_size_overflow(font_height, font_width, &ctx->font_alpha_size) ||
++            mul_size_overflow(ctx->font_alpha_size, (size_t)FLANTERM_FB_FONT_GLYPHS, &ctx->font_alpha_size)) {
+             goto fail;
+         }
+-        ctx->font_bits = _malloc(ctx->font_bits_size);
+-        if (ctx->font_bits == NULL) {
++        ctx->font_alpha = _malloc(ctx->font_alpha_size);
++        if (ctx->font_alpha == NULL) {
+             goto fail;
+         }
+-        memcpy(ctx->font_bits, font, ctx->font_bits_size);
++        memcpy(ctx->font_alpha, font, ctx->font_alpha_size);
+     } else {
+         ctx->font_width = font_width = 8;
+         ctx->font_height = font_height = 16;
+@@ -1417,6 +1510,7 @@ struct flanterm_context *flanterm_fb_init(
+             goto fail;
+         }
+         memcpy(ctx->font_bits, builtin_font, ctx->font_bits_size);
++        ctx->font_spacing = 1;
+     }
+ 
+ #undef FONT_BYTES
+@@ -1426,40 +1520,42 @@ struct flanterm_context *flanterm_fb_init(
+     }
+     ctx->font_width += font_spacing;
+ 
+-    if (mul_size_overflow((size_t)FLANTERM_FB_FONT_GLYPHS, font_height, &ctx->font_bool_size) ||
+-        mul_size_overflow(ctx->font_bool_size, ctx->font_width, &ctx->font_bool_size) ||
+-        mul_size_overflow(ctx->font_bool_size, sizeof(bool), &ctx->font_bool_size)) {
+-        goto fail;
+-    }
+-    ctx->font_bool = _malloc(ctx->font_bool_size);
+-    if (ctx->font_bool == NULL) {
+-        goto fail;
+-    }
+-
+-    for (size_t i = 0; i < FLANTERM_FB_FONT_GLYPHS; i++) {
+-        uint8_t *glyph = &ctx->font_bits[i * font_height];
+-
+-        for (size_t y = 0; y < font_height; y++) {
+-            // NOTE: the characters in VGA fonts are always one byte wide.
+-            // 9 dot wide fonts have 8 dots and one empty column, except
+-            // characters 0xC0-0xDF replicate column 9.
+-            for (size_t x = 0; x < 8; x++) {
+-                size_t offset = i * font_height * ctx->font_width + y * ctx->font_width + x;
++    if (ctx->font_alpha == NULL) {
++        if (mul_size_overflow((size_t)FLANTERM_FB_FONT_GLYPHS, font_height, &ctx->font_bool_size) ||
++            mul_size_overflow(ctx->font_bool_size, ctx->font_width, &ctx->font_bool_size) ||
++            mul_size_overflow(ctx->font_bool_size, sizeof(bool), &ctx->font_bool_size)) {
++            goto fail;
++        }
++        ctx->font_bool = _malloc(ctx->font_bool_size);
++        if (ctx->font_bool == NULL) {
++            goto fail;
++        }
+ 
+-                if ((glyph[y] & (0x80 >> x))) {
+-                    ctx->font_bool[offset] = true;
+-                } else {
+-                    ctx->font_bool[offset] = false;
++        for (size_t i = 0; i < FLANTERM_FB_FONT_GLYPHS; i++) {
++            uint8_t *glyph = &ctx->font_bits[i * font_height];
++
++            for (size_t y = 0; y < font_height; y++) {
++                // NOTE: the characters in VGA fonts are always one byte wide.
++                // 9 dot wide fonts have 8 dots and one empty column, except
++                // characters 0xC0-0xDF replicate column 9.
++                for (size_t x = 0; x < 8; x++) {
++                    size_t offset = i * font_height * ctx->font_width + y * ctx->font_width + x;
++
++                    if ((glyph[y] & (0x80 >> x))) {
++                        ctx->font_bool[offset] = true;
++                    } else {
++                        ctx->font_bool[offset] = false;
++                    }
+                 }
+-            }
+-            // fill columns above 8 like VGA Line Graphics Mode does
+-            for (size_t x = 8; x < ctx->font_width; x++) {
+-                size_t offset = i * font_height * ctx->font_width + y * ctx->font_width + x;
+-
+-                if (i >= 0xc0 && i <= 0xdf) {
+-                    ctx->font_bool[offset] = (glyph[y] & 1);
+-                } else {
+-                    ctx->font_bool[offset] = false;
++                // fill columns above 8 like VGA Line Graphics Mode does
++                for (size_t x = 8; x < ctx->font_width; x++) {
++                    size_t offset = i * font_height * ctx->font_width + y * ctx->font_width + x;
++
++                    if (i >= 0xc0 && i <= 0xdf) {
++                        ctx->font_bool[offset] = (glyph[y] & 1);
++                    } else {
++                        ctx->font_bool[offset] = false;
++                    }
+                 }
+             }
+         }
+@@ -1623,6 +1719,9 @@ fail:
+     if (ctx->font_bool != NULL) {
+         _free(ctx->font_bool, ctx->font_bool_size);
+     }
++    if (ctx->font_alpha != NULL) {
++        _free(ctx->font_alpha, ctx->font_alpha_size);
++    }
+     if (ctx->font_bits != NULL) {
+         _free(ctx->font_bits, ctx->font_bits_size);
+     }
+diff --git a/src/flanterm_backends/fb_private.h b/src/flanterm_backends/fb_private.h
+index 8ecd025..113148a 100644
+--- a/src/flanterm_backends/fb_private.h
++++ b/src/flanterm_backends/fb_private.h
+@@ -90,6 +90,10 @@ struct flanterm_fb_context {
+     size_t font_bool_size;
+     bool *font_bool;
+ 
++    size_t font_spacing;
++    size_t font_alpha_size;
++    uint8_t *font_alpha;
++
+     uint32_t ansi_colours[8];
+     uint32_t ansi_bright_colours[8];
+     uint32_t default_fg, default_bg;

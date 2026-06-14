@@ -55,5 +55,11 @@ clone_repo_commit \
     Flanterm \
     e231edd0e508022521c8233392aabc8ce5c9b242
 
+# Apply patches
+if test -f "$(pwd)/../patches/flanterm.patch"; then
+    echo "  Applying patches/flanterm.patch..."
+    git -C Flanterm apply "$(pwd)/../patches/flanterm.patch"
+fi
+
 touch .deps-obtained
 printf "\nDependencies obtained successfully.\n"
