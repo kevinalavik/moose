@@ -32,17 +32,17 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 
 		if (lapic_count >= MAX_LAPIC) {
 			log("apic: madt: LAPIC: too many entries, dropping uid=%u apic_id=%u\n",
-			       e->uid,
-			       e->id);
+			    e->uid,
+			    e->id);
 			break;
 		}
 
 		lapic[lapic_count] = *e;
-		log("apic: madt: LAPIC\t\t[%u] uid=%u apic_id=%u flags=0x%x\n",
-		       lapic_count,
-		       e->uid,
-		       e->id,
-		       e->flags);
+		log("apic: madt: LAPIC\t[%u] uid=%u apic_id=%u flags=0x%x\n",
+		    lapic_count,
+		    e->uid,
+		    e->id,
+		    e->flags);
 		lapic_count++;
 		break;
 	}
@@ -52,17 +52,17 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 
 		if (ioapic_count >= MAX_IOAPIC) {
 			log("apic: madt: IOAPIC: too many entries, dropping id=%u addr=0x%x\n",
-			       e->id,
-			       e->address);
+			    e->id,
+			    e->address);
 			break;
 		}
 
 		ioapic[ioapic_count] = *e;
-		log("apic: madt: IOAPIC\t\t[%u] id=%u addr=0x%x gsi_base=%u\n",
-		       ioapic_count,
-		       e->id,
-		       e->address,
-		       e->gsi_base);
+		log("apic: madt: IOAPIC\t[%u] id=%u addr=0x%x gsi_base=%u\n",
+		    ioapic_count,
+		    e->id,
+		    e->address,
+		    e->gsi_base);
 		ioapic_count++;
 		break;
 	}
@@ -72,18 +72,18 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 
 		if (iso_count >= MAX_ISO) {
 			log("apic: madt: ISO: too many entries, dropping irq=%02u->gsi=%02u\n",
-			       e->source,
-			       e->gsi);
+			    e->source,
+			    e->gsi);
 			break;
 		}
 
 		iso[iso_count] = *e;
-		log("apic: madt: ISO\t\t\t[%u] bus=%u irq=%02u->gsi=%02u flags=0x%x\n",
-		       iso_count,
-		       e->bus,
-		       e->source,
-		       e->gsi,
-		       e->flags);
+		log("apic: madt: ISO\t\t[%u] bus=%u irq=%02u->gsi=%02u flags=0x%x\n",
+		    iso_count,
+		    e->bus,
+		    e->source,
+		    e->gsi,
+		    e->flags);
 		iso_count++;
 		break;
 	}
@@ -107,17 +107,17 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 
 		if (lapic_nmi_count >= MAX_LAPIC_NMI) {
 			log("apic: madt: APIC-NMI: too many entries, dropping uid=%u lint=%u\n",
-			       e->uid,
-			       e->lint);
+			    e->uid,
+			    e->lint);
 			break;
 		}
 
 		lapic_nmi[lapic_nmi_count] = *e;
 		log("apic: madt: APIC-NMI\t[%u] uid=%u lint=%u flags=0x%x\n",
-		       lapic_nmi_count,
-		       e->uid,
-		       e->lint,
-		       e->flags);
+		    lapic_nmi_count,
+		    e->uid,
+		    e->lint,
+		    e->flags);
 		lapic_nmi_count++;
 		break;
 	}
@@ -158,8 +158,8 @@ void setup_madt()
 	}
 
 	log("apic: lapic base: 0x%llx flags=0x%x\n",
-	       (unsigned long long)madt->local_interrupt_controller_address,
-	       madt->flags);
+	    (unsigned long long)madt->local_interrupt_controller_address,
+	    madt->flags);
 
 	status = uacpi_for_each_subtable(&madt->hdr, sizeof(struct acpi_madt), parse_madt, NULL);
 	if (uacpi_unlikely_error(status)) {
