@@ -50,5 +50,10 @@ clone_repo_commit \
     uACPI \
     bff774beb90980bea18c5f297c7e3135bcd685b8
 
+clone_repo_commit \
+    https://github.com/Mintsuki/Flanterm.git \
+    Flanterm \
+    e231edd0e508022521c8233392aabc8ce5c9b242
+
 touch .deps-obtained
 printf "\nDependencies obtained successfully.\n"

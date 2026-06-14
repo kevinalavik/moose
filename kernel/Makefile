@@ -89,6 +89,7 @@ override CPPFLAGS := \
     -I include \
     -I limine-protocol/include \
     -I uACPI/include \
+    -I Flanterm/src \
     -isystem freestnd-c-hdrs/include \
     $(CPPFLAGS) \
     -DVER_MAJOR=$(VER_MAJOR) \
@@ -111,7 +112,7 @@ override LDFLAGS += \
     --gc-sections \
     -T conf/linker.ld
 
-override SRCFILES := $(shell find -L src cc-runtime/src uACPI/source -type f 2>/dev/null | LC_ALL=C sort)
+override SRCFILES := $(shell find -L src cc-runtime/src uACPI/source Flanterm/src -type f 2>/dev/null | LC_ALL=C sort)
 override CFILES := $(filter %.c,$(SRCFILES))
 override ASFILES := $(filter %.S,$(SRCFILES))
 override NASMFILES := $(filter %.asm,$(SRCFILES))

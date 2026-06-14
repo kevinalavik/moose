@@ -1,3 +1,5 @@
+#include "extra/ascii_font.h"
+#include "limine.h"
 #include <boot/limine.h>
 #include <dev/debugcon.h>
 #include <arch/cpu.h>
@@ -22,15 +24,30 @@
 #include <dev/pci.h>
 #include <sys/apic.h>
 #include <dev/pit.h>
+#include <sys/conf.h>
+#include <flanterm.h>
+#include <flanterm_backends/fb.h>
+#include <extra/ascii_font.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
+struct flanterm_context *ft_ctx = NULL;
 
 void putc(char ch)
 {
+	if (ch == '\n')
+		putc('\r');
 	char s[2] = {ch, '\0'};
 	dbg_write(s);
 	kconsole_write(s);
+	if (ft_ctx)
+		flanterm_write(ft_ctx, s, 1);
+}
+
+void flanterm_kfree(void *ptr, size_t size)
+{
+	(void)size;
+	kfree(ptr);
 }
 
 void kernel_entry(void)
@@ -41,13 +58,17 @@ void kernel_entry(void)
 		printk("error: limine base revision unsuported\n");
 		hcf();
 	}
+
+
+	tsc_calibrate();
+	conf_parse(cmdline_request.response->cmdline);
+
 	if (!fb_request.response->framebuffers[0]) {
 		printk("warn: invalid framebuffer response?\n");
 	} else {
-		kconsole_init(fb_request.response->framebuffers[0]);
+		if (kernel_conf.kconsole)
+			kconsole_init(fb_request.response->framebuffers[0]);
 	}
-
-	tsc_calibrate();
 
 	printk("boot: moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
 	printk("boot: using framebuffer0 for kconsole (%dx%d)\n",
@@ -152,14 +173,47 @@ void kernel_entry(void)
 	/* setup pit timer */
 	pit_init();
 
-
-	printk("----------------------------------------------------------------\n");
+	/* setup flanterm for full userspace TTY */
 	printk("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience\n",
 	       VER_MAJOR,
 	       VER_MINOR,
 	       VER_PATCH,
 	       VER_NOTE);
+	if (kernel_conf.kconsole)
+		kconsole_deinit();
 
+	struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
+	uint32_t flanterm_bg = KCONSOLE_DEFAULT_BG;
+	uint32_t flanterm_fg = KCONSOLE_DEFAULT_FG;
+	ft_ctx = flanterm_fb_init(kmalloc,
+	                          flanterm_kfree,
+	                          fb->address,
+	                          fb->width,
+	                          fb->height,
+	                          fb->pitch,
+	                          fb->red_mask_size,
+	                          fb->red_mask_shift,
+	                          fb->green_mask_size,
+	                          fb->green_mask_shift,
+	                          fb->blue_mask_size,
+	                          fb->blue_mask_shift,
+	                          NULL,
+	                          NULL,
+	                          NULL,
+	                          &flanterm_bg,
+	                          &flanterm_fg,
+	                          NULL,
+	                          NULL,
+	                          NULL,
+	                          0,
+	                          0,
+	                          1,
+	                          0,
+	                          0,
+	                          0,
+	                          0);
+
+	printk("hello from flanterm!\n");
 	/* enable interrupts and halt */
 	sti();
 	hcf();

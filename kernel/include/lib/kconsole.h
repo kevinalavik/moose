@@ -7,6 +7,7 @@
 #define KCONSOLE_DEFAULT_BG 0x0A0C0F
 
 void kconsole_init(struct limine_framebuffer *f);
+void kconsole_deinit(void);
 void kconsole_write(const char *s);
 
 void kconsole_set_fg(uint32_t rgb);

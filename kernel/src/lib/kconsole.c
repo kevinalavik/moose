@@ -177,6 +177,15 @@ void kconsole_init(struct limine_framebuffer *f)
 	kconsole_draw_bar();
 }
 
+void kconsole_deinit(void)
+{
+	if (!fb)
+		return;
+	for (uint64_t y = 0; y < fb->height; y++)
+		fast_memset_row(_pixel_ptr(0, y), 0, fb->width);
+	fb = NULL;
+}
+
 void kconsole_set_fg(uint32_t rgb)
 {
 	col_fg = rgb & 0x00FFFFFF;

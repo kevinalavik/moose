@@ -15,8 +15,7 @@ static volatile uint32_t pit_ticks;
 static void pit_handler(int_frame_t *frame)
 {
 	(void)frame;
-	if (++pit_ticks % 1000 == 0)
-		printk("tick %d\n", pit_ticks);
+	pit_ticks++;
 }
 
 void pit_init(void)

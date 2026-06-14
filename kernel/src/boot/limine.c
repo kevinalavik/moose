@@ -29,6 +29,9 @@ __attribute__((used,
                section(".limine_requests"))) volatile struct limine_rsdp_request rsdp_request = {
     .id = LIMINE_RSDP_REQUEST_ID, .revision = 0};
 
+__attribute__((used, section(".limine_requests"))) volatile struct limine_executable_cmdline_request
+    cmdline_request = {.id = LIMINE_EXECUTABLE_CMDLINE_REQUEST_ID, .revision = 0};
+
 /* LIMINE REQUESTS END */
 __attribute__((
     used, section(".limine_requests_end"))) static volatile uint64_t limine_requests_end_marker[] =

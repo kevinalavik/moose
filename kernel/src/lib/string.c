@@ -77,3 +77,25 @@ int strcmp(const char *a, const char *b)
 
 	return (unsigned char)(*a) - (unsigned char)(*b);
 }
+
+int isspace(int c)
+{
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+int strcasecmp(const char *a, const char *b)
+{
+	while (*a && *b) {
+		char ca = *a;
+		char cb = *b;
+		if (ca >= 'A' && ca <= 'Z')
+			ca += 0x20;
+		if (cb >= 'A' && cb <= 'Z')
+			cb += 0x20;
+		if (ca != cb)
+			return (unsigned char)ca - (unsigned char)cb;
+		a++;
+		b++;
+	}
+	return (unsigned char)*a - (unsigned char)*b;
+}

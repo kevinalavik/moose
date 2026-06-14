@@ -11,6 +11,7 @@ size_t strlen(const char *s);
 char *strcpy(char *dst, const char *src);
 char *strncpy(char *dst, const char *src, size_t n);
 int strcmp(const char *a, const char *b);
-
+int isspace(int c);
+int strcasecmp(const char *a, const char *b);
 
 #endif // LIB_STRING_H
