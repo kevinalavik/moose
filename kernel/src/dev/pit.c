@@ -28,5 +28,5 @@ void pit_init(void)
 
 	irq_register(0, pit_handler);
 
-	printk("pit: initialized at %u Hz\n", PIT_FREQ / divisor);
+	log("pit: initialized at %u Hz\n", PIT_FREQ / divisor);
 }

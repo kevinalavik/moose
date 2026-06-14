@@ -349,7 +349,7 @@ void tsc_calibrate(void)
 	}
 
 	if (!khz || khz < 100000 || khz >= 10000000) {
-		printk("tsc: calibration failed, assuming 1 GHz\n");
+		log("tsc: calibration failed, assuming 1 GHz\n");
 		khz = 1000000ULL;
 		method = "fallback";
 	}
@@ -357,7 +357,7 @@ void tsc_calibrate(void)
 	tsc_hz = khz * KHZ;
 	set_cyc2ns_scale(khz);
 
-	printk("tsc: %llu.%03llu MHz (%llu kHz) [%s]\n", khz / KHZ, khz % KHZ, khz, method);
+	log("tsc: %llu.%03llu MHz (%llu kHz) [%s]\n", khz / KHZ, khz % KHZ, khz, method);
 }
 
 uint64_t tsc_read(void)

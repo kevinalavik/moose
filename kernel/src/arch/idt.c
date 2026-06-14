@@ -28,7 +28,7 @@ void interrupt_handler(int_frame_t *frame)
 		irq_dispatch(frame);
 		return;
 	}
-	printk("sys: unhandled interrupt vector=%u rip=%p\n", frame->vector, (void *)frame->rip);
+	log("sys: unhandled interrupt vector=%u rip=%p\n", frame->vector, (void *)frame->rip);
 }
 
 void idt_set_descriptor(uint8_t vector, void *isr, uint8_t flags)
@@ -53,5 +53,5 @@ void idt_init()
 		idt_set_descriptor(v, isr_stub_table[v], 0x8E);
 
 	__asm__ volatile("lidt %0" : : "m"(idtr));
-	printk("sys: loaded idt base=%p limit=0x%x\n", (void *)idtr.base, idtr.limit);
+	log("sys: loaded idt base=%p limit=0x%x\n", (void *)idtr.base, idtr.limit);
 }

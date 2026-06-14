@@ -86,8 +86,8 @@ void pfn_init(struct limine_memmap_response *memmap)
 			reserved_pages++;
 	}
 
-	printk("mm: PFN database @ %p (pfn 0..%llu)\n", mem_map, max_pfn);
-	printk("mm: max_pfn=%llu\n", max_pfn);
-	printk("mm: free_pages=%llu (%llu MiB)\n", free_pages, free_pages / 256);
-	printk("mm: reserved_pages=%llu\n", reserved_pages);
+	log("mm: PFN database @ %p (pfn 0..%llu)\n", mem_map, max_pfn);
+	log("mm: max_pfn=%llu\n", max_pfn);
+	log("mm: free_pages=%llu (%llu MiB)\n", free_pages, free_pages / 256);
+	log("mm: reserved_pages=%llu\n", reserved_pages);
 }

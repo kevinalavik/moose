@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <sys/conf.h>
 #include <dev/tsc.h>
 
 extern void putc(char);
@@ -270,9 +271,24 @@ void printk(const char *fmt, ...)
 	va_list list;
 	va_start(list, fmt);
 
-	if (*fmt == PRINTK_NOTIME[0]) {
+	while (*fmt == PRINTK_FORCE[0] || *fmt == PRINTK_NOTIME[0])
 		fmt++;
-	} else if (tsc_hz != 0) {
+
+	_buf = NULL;
+	_buf_len = 0;
+	_buf_i = 0;
+	_vprint(fmt, list);
+	va_end(list);
+}
+
+void log(const char *fmt, ...)
+{
+	if (kernel_conf.quiet)
+		_log_allow_fb = false;
+
+	va_list ap;
+	va_start(ap, fmt);
+	if (tsc_hz != 0) {
 		uint64_t ns = tsc_to_ns(tsc_read());
 		uint64_t secs = ns / 1000000000ULL;
 		uint64_t msecs = (ns / 1000000ULL) % 1000ULL;
@@ -285,12 +301,9 @@ void printk(const char *fmt, ...)
 	} else {
 		_printstr("[0.000] ", 0, false);
 	}
-
-	_buf = NULL;
-	_buf_len = 0;
-	_buf_i = 0;
-	_vprint(fmt, list);
-	va_end(list);
+	vprintk(fmt, ap);
+	va_end(ap);
+	_log_allow_fb = true;
 }
 
 void vprintk(const char *fmt, va_list ap)

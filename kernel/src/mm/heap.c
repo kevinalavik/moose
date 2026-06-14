@@ -30,7 +30,7 @@ void heap_init(void)
 			panic(NULL, "heap: failed to create kmalloc cache (class %d)", i);
 	}
 
-	printk("mm: kernel heap initialised (slab classes 16..%u bytes, large up to %u)\n",
+	log("mm: kernel heap initialised (slab classes 16..%u bytes, large up to %u)\n",
 	       heap_size_classes[HEAP_NUM_CLASSES - 1],
 	       LARGE_MAX_SIZE);
 }

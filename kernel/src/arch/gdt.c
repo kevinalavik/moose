@@ -58,5 +58,5 @@ void gdt_init()
 	    :
 	    : [gdtr] "m"(kernel_gdtr), [csel] "i"(GDT_KCODE_SEL), [dsel] "i"(GDT_KDATA_SEL)
 	    : "rax", "memory");
-	printk("sys: loaded kernel gdt, gdtr=%p\n", &kernel_gdtr);
+	log("sys: loaded kernel gdt, gdtr=%p\n", &kernel_gdtr);
 }

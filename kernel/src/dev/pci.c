@@ -115,7 +115,7 @@ static void pci_scan_function(uint8_t bus, uint8_t device, uint8_t function)
 	uint8_t prog_if = pci_config_read8(addr, 0x09);
 	uint8_t revision = pci_config_read8(addr, 0x08);
 
-	printk("pci: %02x:%02x.%x %04x:%04x class %02x.%02x.%02x rev %02x - %s\n",
+	log("pci: %02x:%02x.%x %04x:%04x class %02x.%02x.%02x rev %02x - %s\n",
 	       bus,
 	       device,
 	       function,

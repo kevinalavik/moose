@@ -110,7 +110,7 @@ void vinit(vctx_t *ctx, ptable_t *ptable)
 	ctx->alloc_hint = VMA_DEFAULT_BASE;
 	ctx->vfind_hint = NULL;
 
-	printk("vma: context %p initialised (ptable=%p, map_base=%p)\n",
+	log("vma: context %p initialised (ptable=%p, map_base=%p)\n",
 	       ctx,
 	       ptable,
 	       (void *)ctx->map_base);
@@ -310,19 +310,19 @@ int vfault(vctx_t *ctx, uintptr_t addr, uint32_t access_flags)
 
 	vma_t *vma = vfind(ctx, addr);
 	if (!vma) {
-		printk("vma: fault at %p: no vma covers this address\n", (void *)addr);
+		log("vma: fault at %p: no vma covers this address\n", (void *)addr);
 		return -1;
 	}
 
 	if ((access_flags & VMA_WRITE) && !(vma->prot & VMA_WRITE)) {
-		printk("vma: fault at %p: write access denied (vma prot=0x%x)\n",
+		log("vma: fault at %p: write access denied (vma prot=0x%x)\n",
 		       (void *)addr,
 		       vma->prot);
 		return -1;
 	}
 
 	if ((access_flags & VMA_EXEC) && !(vma->prot & VMA_EXEC)) {
-		printk("vma: fault at %p: exec access denied (vma prot=0x%x)\n",
+		log("vma: fault at %p: exec access denied (vma prot=0x%x)\n",
 		       (void *)addr,
 		       vma->prot);
 		return -1;

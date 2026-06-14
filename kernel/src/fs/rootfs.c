@@ -9,7 +9,7 @@ extern volatile struct limine_module_request mod_request;
 
 static void cpio_handle(struct limine_file *mod)
 {
-	printk("fs: cpio archive at %s (%llu bytes)\n", mod->path, mod->size);
+	log("fs: cpio archive at %s (%llu bytes)\n", mod->path, mod->size);
 }
 
 static void ramfs_handle(void)
@@ -18,7 +18,7 @@ static void ramfs_handle(void)
 
 	for (uint64_t i = 0; i < mod_request.response->module_count; i++) {
 		struct limine_file *mod = mod_request.response->modules[i];
-		printk("boot: discovered boot module: %s\n", mod->path);
+		log("boot: discovered boot module: %s\n", mod->path);
 
 		if (strncmp(mod->path, "ramfs.", 6) == 0 || strstr(mod->path, "/ramfs.") != NULL) {
 			ramfs_mod = mod;
@@ -71,7 +71,7 @@ void rootfs_init(void)
 	if (kernel_conf.rootfs == NULL)
 		panic(NULL, "no rootfs supplied, edit kernel cmdline to like: \"rootfs=ramfs\"");
 
-	printk("fs: using rootfs=%s\n", kernel_conf.rootfs);
+	log("fs: using rootfs=%s\n", kernel_conf.rootfs);
 
 	for (size_t i = 0; i < sizeof(rootfs_table) / sizeof(rootfs_table[0]); i++) {
 		if (strcmp(rootfs_table[i].name, "default") == 0)

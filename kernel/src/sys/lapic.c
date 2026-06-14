@@ -45,7 +45,7 @@ static void lapic_configure_nmi_lints(uint32_t apic_id)
 		uint32_t reg = (e->lint == 0) ? LAPIC_REG_LVT_LINT0 : LAPIC_REG_LVT_LINT1;
 		lapic_write(reg, lvt);
 
-		printk("apic: lapic: LINT%u configured as NMI (uid=%u flags=0x%x)\n",
+		log("apic: lapic: LINT%u configured as NMI (uid=%u flags=0x%x)\n",
 		       e->lint,
 		       e->uid,
 		       e->flags);
@@ -74,13 +74,13 @@ void lapic_init(void)
 	if (x2apic_supported) {
 		wrmsr(IA32_APIC_BASE_MSR, apic_base_msr | APIC_BASE_ENABLE | APIC_BASE_X2APIC);
 		lapic_x2apic = 1;
-		printk("apic: lapic mode = x2APIC\n");
+		log("apic: lapic mode = x2APIC\n");
 	} else {
 		if (!lapic_mmio)
 			lapic_mmio = (volatile uint32_t *)vmap_mmio(kernel_vctx, phys, PAGE_SIZE);
 
 		wrmsr(IA32_APIC_BASE_MSR, apic_base_msr | APIC_BASE_ENABLE);
-		printk("apic: lapic mode = xAPIC, mmio_phys=0x%llx mmio_virt=%p\n",
+		log("apic: lapic mode = xAPIC, mmio_phys=0x%llx mmio_virt=%p\n",
 		       (unsigned long long)phys,
 		       (void *)lapic_mmio);
 	}
@@ -101,7 +101,7 @@ void lapic_init(void)
 
 	lapic_configure_nmi_lints(lapic_get_id());
 
-	printk("apic: lapic id=%u version=0x%x\n", lapic_get_id(), lapic_read(LAPIC_REG_VERSION));
+	log("apic: lapic id=%u version=0x%x\n", lapic_get_id(), lapic_read(LAPIC_REG_VERSION));
 }
 
 uint32_t lapic_read(uint32_t reg)

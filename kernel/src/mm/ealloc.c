@@ -54,7 +54,7 @@ void ealloc_init(struct limine_memmap_response *memmap)
 			continue;
 
 		if (region_count >= EALLOC_MAX_REGIONS) {
-			printk("mm: ealloc: too many usable regions, ignoring the rest\n");
+			log("mm: ealloc: too many usable regions, ignoring the rest\n");
 			break;
 		}
 
@@ -66,14 +66,14 @@ void ealloc_init(struct limine_memmap_response *memmap)
 	if (region_count == 0)
 		panic(NULL, "failed to find usable memory for early allocator");
 
-	printk("mm: ealloc: %llu usable region(s) available for early allocation\n",
+	log("mm: ealloc: %llu usable region(s) available for early allocation\n",
 	       (unsigned long long)region_count);
 }
 
 static void ealloc_record(uint64_t phys, uint64_t size)
 {
 	if (reserved_count >= EALLOC_MAX_RESERVED) {
-		printk("mm: ealloc: too many early allocations to track, "
+		log("mm: ealloc: too many early allocations to track, "
 		       "pfn database reservations may be incomplete\n");
 		return;
 	}

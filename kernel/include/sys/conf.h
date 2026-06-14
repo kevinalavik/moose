@@ -16,7 +16,7 @@ struct conf_entry {
 };
 
 struct kernel_conf {
-	bool kconsole;
+	bool quiet;
 	char *rootfs;
 };
 

@@ -118,7 +118,7 @@ int map_page(ptable_t *pml4, uint64_t vaddr, uint64_t paddr, uint64_t flags)
 	entry = pt->entries[PT_INDEX(vaddr)];
 	if (entry & PTE_PRESENT) {
 		if ((entry & PTE_ADDR_MASK) != (paddr & PTE_ADDR_MASK))
-			printk("paging: remapping VA=%p (old PA=%p new PA=%p)\n",
+			log("paging: remapping VA=%p (old PA=%p new PA=%p)\n",
 			       vaddr,
 			       entry & PTE_ADDR_MASK,
 			       paddr);
@@ -137,28 +137,28 @@ int unmap_page(ptable_t *pml4, uint64_t vaddr)
 
 	entry = pml4->entries[PML4_INDEX(vaddr)];
 	if (!(entry & PTE_PRESENT)) {
-		printk("paging: unmap: missing pml4 entry VA=%p\n", vaddr);
+		log("paging: unmap: missing pml4 entry VA=%p\n", vaddr);
 		return -1;
 	}
 
 	pdpt = (ptable_t *)phys_to_virt(entry & PTE_ADDR_MASK);
 	entry = pdpt->entries[PDPT_INDEX(vaddr)];
 	if (!(entry & PTE_PRESENT)) {
-		printk("paging: unmap: missing pdpt entry VA=%p\n", vaddr);
+		log("paging: unmap: missing pdpt entry VA=%p\n", vaddr);
 		return -1;
 	}
 
 	pd = (ptable_t *)phys_to_virt(entry & PTE_ADDR_MASK);
 	entry = pd->entries[PD_INDEX(vaddr)];
 	if (!(entry & PTE_PRESENT)) {
-		printk("paging: unmap: missing pd entry VA=%p\n", vaddr);
+		log("paging: unmap: missing pd entry VA=%p\n", vaddr);
 		return -1;
 	}
 
 	pt = (ptable_t *)phys_to_virt(entry & PTE_ADDR_MASK);
 	entry = pt->entries[PT_INDEX(vaddr)];
 	if (!(entry & PTE_PRESENT)) {
-		printk("paging: unmap: page not mapped VA=%p\n", vaddr);
+		log("paging: unmap: page not mapped VA=%p\n", vaddr);
 		return -1;
 	}
 
@@ -213,19 +213,19 @@ void paging_init()
 	for (int i = 256; i < 512; i++)
 		new_pml4->entries[i] = boot_pml4->entries[i];
 
-	printk("paging: mappings:\n");
-	printk("paging:   limine_requests: 0x%llx -> 0x%llx [RO NX]\n",
+	log("paging: mappings:\n");
+	log("paging:   limine_requests: 0x%llx -> 0x%llx [RO NX]\n",
 	       (uint64_t)__limine_requests_start,
 	       (uint64_t)__limine_requests_end);
-	printk("paging:   text:            0x%llx -> 0x%llx [RX]\n",
+	log("paging:   text:            0x%llx -> 0x%llx [RX]\n",
 	       (uint64_t)__text_start,
 	       (uint64_t)__text_end);
-	printk("paging:   rodata:          0x%llx -> 0x%llx [RO NX]\n",
+	log("paging:   rodata:          0x%llx -> 0x%llx [RO NX]\n",
 	       (uint64_t)__rodata_start,
 	       (uint64_t)__rodata_end);
-	printk("paging:   data/bss:        0x%llx -> 0x%llx [RW NX]\n",
+	log("paging:   data/bss:        0x%llx -> 0x%llx [RW NX]\n",
 	       (uint64_t)__data_start,
 	       (uint64_t)__data_end);
 	ptable_load(kernel_ptable);
-	printk("sys: loaded kernel CR3: %p\n", (void *)read_cr3());
+	log("sys: loaded kernel CR3: %p\n", (void *)read_cr3());
 }

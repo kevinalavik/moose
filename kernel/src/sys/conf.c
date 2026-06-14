@@ -9,12 +9,12 @@ static char conf_str_arena[CONF_STR_ARENA_SIZE];
 static size_t conf_str_off = 0;
 
 struct kernel_conf kernel_conf = {
-    .kconsole = false,
+    .quiet = false,
     .rootfs = NULL,
 };
 
 static struct conf_entry conf_table[] = {
-    {CONF_BOOL, "kconsole", &kernel_conf.kconsole},
+    {CONF_BOOL, "quiet", &kernel_conf.quiet},
     {CONF_STR, "rootfs", &kernel_conf.rootfs},
 };
 

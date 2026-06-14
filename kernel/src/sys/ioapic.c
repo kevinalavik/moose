@@ -62,7 +62,7 @@ static size_t ioapic_index_for_gsi(uint32_t gsi, uint8_t *pin_out)
 void ioapic_init(void)
 {
 	if (ioapic_count == 0) {
-		printk("apic: warning: no IOAPIC entries in MADT\n");
+		log("apic: warning: no IOAPIC entries in MADT\n");
 		return;
 	}
 
@@ -73,7 +73,7 @@ void ioapic_init(void)
 		uint32_t ver = ioapic_read(i, IOAPIC_REG_VER);
 		uint32_t max_pin = (ver >> 16) & 0xFF;
 
-		printk("apic: ioapic[%u] madt_id=%u gsi_base=%u entries=%u phys=0x%x\n",
+		log("apic: ioapic[%u] madt_id=%u gsi_base=%u entries=%u phys=0x%x\n",
 		       (unsigned)i,
 		       ioapic[i].id,
 		       ioapic[i].gsi_base,
@@ -132,7 +132,7 @@ void ioapic_set_irq(uint8_t irq, uint32_t lapic_id, uint8_t vector)
 	size_t idx = ioapic_index_for_gsi(gsi, &pin);
 	ioapic_write_redir(idx, pin, entry);
 
-	printk("apic: ioapic: irq%u -> gsi%u -> vector=0x%x dest=%u flags=0x%x\n",
+	log("apic: ioapic: irq%u -> gsi%u -> vector=0x%x dest=%u flags=0x%x\n",
 	       irq,
 	       gsi,
 	       vector,

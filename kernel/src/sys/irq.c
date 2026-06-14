@@ -12,7 +12,7 @@ void irq_register(uint8_t irq, irq_handler_t handler)
 	irq_handlers[irq] = handler;
 	uint32_t gsi = irq_resolve_gsi(irq);
 	ioapic_unmask_gsi(gsi);
-	printk("irq: registered handler for irq%u -> gsi%u\n", irq, gsi);
+	log("irq: registered handler for irq%u -> gsi%u\n", irq, gsi);
 }
 
 void irq_dispatch(int_frame_t *frame)

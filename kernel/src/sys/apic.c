@@ -31,14 +31,14 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		struct acpi_madt_lapic *e = (void *)hdr;
 
 		if (lapic_count >= MAX_LAPIC) {
-			printk("apic: madt: LAPIC: too many entries, dropping uid=%u apic_id=%u\n",
+			log("apic: madt: LAPIC: too many entries, dropping uid=%u apic_id=%u\n",
 			       e->uid,
 			       e->id);
 			break;
 		}
 
 		lapic[lapic_count] = *e;
-		printk("apic: madt: LAPIC\t\t[%u] uid=%u apic_id=%u flags=0x%x\n",
+		log("apic: madt: LAPIC\t\t[%u] uid=%u apic_id=%u flags=0x%x\n",
 		       lapic_count,
 		       e->uid,
 		       e->id,
@@ -51,14 +51,14 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		struct acpi_madt_ioapic *e = (void *)hdr;
 
 		if (ioapic_count >= MAX_IOAPIC) {
-			printk("apic: madt: IOAPIC: too many entries, dropping id=%u addr=0x%x\n",
+			log("apic: madt: IOAPIC: too many entries, dropping id=%u addr=0x%x\n",
 			       e->id,
 			       e->address);
 			break;
 		}
 
 		ioapic[ioapic_count] = *e;
-		printk("apic: madt: IOAPIC\t\t[%u] id=%u addr=0x%x gsi_base=%u\n",
+		log("apic: madt: IOAPIC\t\t[%u] id=%u addr=0x%x gsi_base=%u\n",
 		       ioapic_count,
 		       e->id,
 		       e->address,
@@ -71,14 +71,14 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		struct acpi_madt_interrupt_source_override *e = (void *)hdr;
 
 		if (iso_count >= MAX_ISO) {
-			printk("apic: madt: ISO: too many entries, dropping irq=%02u->gsi=%02u\n",
+			log("apic: madt: ISO: too many entries, dropping irq=%02u->gsi=%02u\n",
 			       e->source,
 			       e->gsi);
 			break;
 		}
 
 		iso[iso_count] = *e;
-		printk("apic: madt: ISO\t\t\t[%u] bus=%u irq=%02u->gsi=%02u flags=0x%x\n",
+		log("apic: madt: ISO\t\t\t[%u] bus=%u irq=%02u->gsi=%02u flags=0x%x\n",
 		       iso_count,
 		       e->bus,
 		       e->source,
@@ -92,12 +92,12 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		struct acpi_madt_nmi_source *e = (void *)hdr;
 
 		if (nmi_count >= MAX_NMI) {
-			printk("apic: madt: NMI: too many entries, dropping gsi=%u\n", e->gsi);
+			log("apic: madt: NMI: too many entries, dropping gsi=%u\n", e->gsi);
 			break;
 		}
 
 		nmi[nmi_count] = *e;
-		printk("apic: madt: NMI\t[%u] gsi=%u flags=0x%x\n", nmi_count, e->gsi, e->flags);
+		log("apic: madt: NMI\t[%u] gsi=%u flags=0x%x\n", nmi_count, e->gsi, e->flags);
 		nmi_count++;
 		break;
 	}
@@ -106,14 +106,14 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		struct acpi_madt_lapic_nmi *e = (void *)hdr;
 
 		if (lapic_nmi_count >= MAX_LAPIC_NMI) {
-			printk("apic: madt: APIC-NMI: too many entries, dropping uid=%u lint=%u\n",
+			log("apic: madt: APIC-NMI: too many entries, dropping uid=%u lint=%u\n",
 			       e->uid,
 			       e->lint);
 			break;
 		}
 
 		lapic_nmi[lapic_nmi_count] = *e;
-		printk("apic: madt: APIC-NMI\t[%u] uid=%u lint=%u flags=0x%x\n",
+		log("apic: madt: APIC-NMI\t[%u] uid=%u lint=%u flags=0x%x\n",
 		       lapic_nmi_count,
 		       e->uid,
 		       e->lint,
@@ -128,12 +128,12 @@ static uacpi_iteration_decision parse_madt(void *user, struct acpi_entry_hdr *hd
 		lapic_override = *e;
 		has_lapic_override = 1;
 
-		printk("apic: madt: LAPIC override: 0x%llx\n", (unsigned long long)e->address);
+		log("apic: madt: LAPIC override: 0x%llx\n", (unsigned long long)e->address);
 		break;
 	}
 
 	default:
-		printk("apic: madt: unknown entry type=%u len=%u\n", hdr->type, hdr->length);
+		log("apic: madt: unknown entry type=%u len=%u\n", hdr->type, hdr->length);
 		break;
 	}
 
@@ -157,7 +157,7 @@ void setup_madt()
 		return;
 	}
 
-	printk("apic: lapic base: 0x%llx flags=0x%x\n",
+	log("apic: lapic base: 0x%llx flags=0x%x\n",
 	       (unsigned long long)madt->local_interrupt_controller_address,
 	       madt->flags);
 
@@ -205,7 +205,7 @@ void pic_disable(void)
 	outb(IMCR_ADDR, 0x70);
 	outb(IMCR_DATA, 0x01);
 
-	printk("apic: legacy PIC masked, IMCR set to APIC mode\n");
+	log("apic: legacy PIC masked, IMCR set to APIC mode\n");
 }
 
 void apic_init()
@@ -217,13 +217,13 @@ void apic_init()
 	ioapic_init();
 
 	uint32_t bsp_id = lapic_get_id();
-	printk("apic: bootstrap CPU lapic id = %u\n", bsp_id);
+	log("apic: bootstrap CPU lapic id = %u\n", bsp_id);
 
 	/* route the legacy ISA IRQs (0-15) to the bootstrap CPU. each entry
 	 * stays masked (see ioapic_set_irq) until a driver installs a handler
 	 * for its vector and calls ioapic_unmask_gsi(). */
 	if (ioapic_count == 0) {
-		printk("apic: no IOAPIC present, skipping legacy IRQ routing\n");
+		log("apic: no IOAPIC present, skipping legacy IRQ routing\n");
 		return;
 	}
 
@@ -234,7 +234,7 @@ void apic_init()
 	for (uint8_t irq = 0; irq < 16; irq++) {
 		uint32_t gsi = irq_resolve_gsi(irq);
 		if (gsi_mapped[gsi]) {
-			printk("apic: ioapic: irq%u -> gsi%u already routed, skipping\n", irq, gsi);
+			log("apic: ioapic: irq%u -> gsi%u already routed, skipping\n", irq, gsi);
 			continue;
 		}
 		gsi_mapped[gsi] = true;

@@ -72,7 +72,7 @@ static const char *uacpi_log_level_to_str(uacpi_log_level lvl)
 
 void uacpi_kernel_log(uacpi_log_level lvl, const uacpi_char *msg)
 {
-	printk("uacpi: %s: %s", uacpi_log_level_to_str(lvl), msg);
+	log("uacpi: %s: %s", uacpi_log_level_to_str(lvl), msg);
 }
 
 void *uacpi_kernel_alloc(uacpi_size size)

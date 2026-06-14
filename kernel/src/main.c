@@ -1,10 +1,12 @@
 #include <boot/limine.h>
+#include <stddef.h>
+#include <stdint.h>
+#define ASCII_FONT_IMPLEMENTATION
 #include <extra/ascii_font.h>
 #include <dev/debugcon.h>
 #include <arch/cpu.h>
 #include <arch/cpuid.h>
 #include <lib/printk.h>
-#include <lib/kconsole.h>
 #include <arch/gdt.h>
 #include <arch/idt.h>
 #include <sys/panic.h>
@@ -31,6 +33,7 @@
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
 struct flanterm_context *ft_ctx = NULL;
+bool _log_allow_fb = true;
 
 void putc(char ch)
 {
@@ -38,15 +41,8 @@ void putc(char ch)
 		putc('\r');
 	char s[2] = {ch, '\0'};
 	dbg_write(s);
-	kconsole_write(s);
-	if (ft_ctx)
+	if (ft_ctx && _log_allow_fb)
 		flanterm_write(ft_ctx, s, 1);
-}
-
-void flanterm_kfree(void *ptr, size_t size)
-{
-	(void)size;
-	kfree(ptr);
 }
 
 void kernel_entry(void)
@@ -54,31 +50,55 @@ void kernel_entry(void)
 	cli(); /* disable interrupts*/
 
 	if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision)) {
-		printk("error: limine base revision unsuported\n");
+		log("error: limine base revision unsuported\n");
 		hcf();
 	}
-
 
 	tsc_calibrate();
 	conf_parse(cmdline_request.response->cmdline);
 
+	struct limine_framebuffer *fb = NULL;
 	if (!fb_request.response->framebuffers[0]) {
-		printk("warn: invalid framebuffer response?\n");
+		log("warn: invalid framebuffer response?\n");
 	} else {
-		if (kernel_conf.kconsole)
-			kconsole_init(fb_request.response->framebuffers[0]);
+		fb = fb_request.response->framebuffers[0];
+		ft_ctx = flanterm_fb_init(NULL,
+		                          NULL,
+		                          fb->address,
+		                          fb->width,
+		                          fb->height,
+		                          fb->pitch,
+		                          fb->red_mask_size,
+		                          fb->red_mask_shift,
+		                          fb->green_mask_size,
+		                          fb->green_mask_shift,
+		                          fb->blue_mask_size,
+		                          fb->blue_mask_shift,
+		                          NULL,
+		                          NULL,
+		                          NULL,
+		                          NULL,
+		                          NULL,
+		                          NULL,
+		                          NULL,
+		                          (void *)ascii_font,
+		                          ASCII_FONT_WIDTH,
+		                          ASCII_FONT_HEIGHT,
+		                          0,
+		                          0,
+		                          0,
+		                          0,
+		                          0);
 	}
 
-	printk("boot: moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
-	printk("boot: using framebuffer0 for kconsole (%dx%d)\n",
-	       fb_request.response->framebuffers[0]->width,
-	       fb_request.response->framebuffers[0]->height);
-	printk("boot: running on a %s\n", get_cpu_string());
+	log("boot: moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
+	if (fb)
+		log("boot: using framebuffer0 for earlycon (%dx%d)\n", fb->width, fb->height);
+	log("boot: running on a %s\n", get_cpu_string());
 
 	/* setup gdt and interrupts */
 	gdt_init();
 	idt_init();
-	// *(uint64_t *)0xdeadbeef = 42;
 
 	/* memory */
 	if (!memmap_request.response) {
@@ -91,10 +111,10 @@ void kernel_entry(void)
 
 	for (uint64_t i = 0; i < memmap_request.response->entry_count; i++) {
 		struct limine_memmap_entry *m = memmap_request.response->entries[i];
-		printk("mm: region: 0x%.16llx->0x%.16llx (usable=%s)\n",
-		       m->base,
-		       m->base + m->length,
-		       m->type == LIMINE_MEMMAP_USABLE ? "yes" : "no");
+		log("mm: region: 0x%.16llx->0x%.16llx (usable=%s)\n",
+		    m->base,
+		    m->base + m->length,
+		    m->type == LIMINE_MEMMAP_USABLE ? "yes" : "no");
 	}
 
 	ealloc_init(memmap_request.response);
@@ -116,9 +136,9 @@ void kernel_entry(void)
 		uint64_t *a = kmalloc(sizeof(uint64_t));
 		if (!a)
 			panic(NULL, "failed to alloc %u bytes on heap", sizeof(uint64_t));
-		printk("test: allocated %u bytes -> %p\n", sizeof(uint64_t), a);
+		log("test: allocated %u bytes -> %p\n", sizeof(uint64_t), a);
 		*a = 42;
-		printk("test: wrote %d to %p\n", *a, a);
+		log("test: wrote %d to %p\n", *a, a);
 		kfree(a);
 	}
 
@@ -128,9 +148,9 @@ void kernel_entry(void)
 	kernel_vctx = &kvctx;
 
 	uint64_t *addr = (uint64_t *)vmap_anon(&kvctx, PAGE_SIZE);
-	printk("test: vmap returned %p\n", (void *)addr);
+	log("test: vmap returned %p\n", (void *)addr);
 	*addr = 0xC0FFEE;
-	printk("test: wrote 0x%llx to %p, read back 0x%llx\n", (uint64_t)0xC0FFEE, addr, *addr);
+	log("test: wrote 0x%llx to %p, read back 0x%llx\n", (uint64_t)0xC0FFEE, addr, *addr);
 
 	/* cleanup */
 	while (kvctx.vma_list)
@@ -175,47 +195,17 @@ void kernel_entry(void)
 	/* setup pit timer */
 	pit_init();
 
-	/* setup flanterm for full userspace TTY */
-	printk("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience\n",
+	log("moose-kernel v%d.%d.%d%s finished loading, thanks for your patience\n",
+	    VER_MAJOR,
+	    VER_MINOR,
+	    VER_PATCH,
+	    VER_NOTE);
+
+	printk("Hello on tty0 on moose-kernel v%d.%d.%d%s\n",
 	       VER_MAJOR,
 	       VER_MINOR,
 	       VER_PATCH,
 	       VER_NOTE);
-	if (kernel_conf.kconsole)
-		kconsole_deinit();
-
-	struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
-	ft_ctx = flanterm_fb_init(kmalloc,
-	                          flanterm_kfree,
-	                          fb->address,
-	                          fb->width,
-	                          fb->height,
-	                          fb->pitch,
-	                          fb->red_mask_size,
-	                          fb->red_mask_shift,
-	                          fb->green_mask_size,
-	                          fb->green_mask_shift,
-	                          fb->blue_mask_size,
-	                          fb->blue_mask_shift,
-	                          NULL,
-	                          NULL,
-	                          NULL,
-	                          NULL,
-	                          NULL,
-	                          NULL,
-	                          NULL,
-	                          (void *)ascii_font,
-	                          ASCII_FONT_WIDTH,
-	                          ASCII_FONT_HEIGHT,
-	                          0,
-	                          0,
-	                          0,
-	                          0,
-	                          0);
-
-
-	/* just a bunch off wack*/
-	printk("tty0 on moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
 
 	/* enable interrupts and halt */
 	sti();

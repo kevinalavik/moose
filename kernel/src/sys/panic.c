@@ -3,7 +3,6 @@
 #include <arch/cpu.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <lib/kconsole.h>
 #include <mm/vma.h>
 
 static volatile int _panicking = 0;
@@ -83,13 +82,12 @@ void panic(int_frame_t *frame, const char *fmt, ...)
 		}
 	}
 
-	printk(PRINTK_NOTIME "\n");
-	kconsole_set_fg(0x00FF0000); // pure red
+	printk(PRINTK_FORCE "\n");
 
-	printk(PRINTK_NOTIME
+	printk(PRINTK_FORCE
 	       "\e[0;91m====================================================================="
 	       "=====================\n");
-	printk(PRINTK_NOTIME "\t\t\t           @@@@@@@@@@@@@@@@@@\n"
+	printk(PRINTK_FORCE "\t\t\t           @@@@@@@@@@@@@@@@@@\n"
 	                     "\t\t\t         @@@@@@@@@@@@@@@@@@@@@@@\n"
 	                     "\t\t\t       @@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
 	                     "\t\t\t      @@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -100,47 +98,46 @@ void panic(int_frame_t *frame, const char *fmt, ...)
 	                     "\t\t\t     @@@@@@@@@@@@@@@/,/,/./'/_|.\\'\\,\\\n"
 	                     "\t\t\t       @@@@@@@@@@@@@|  | | | | | | | |\n"
 	                     "\t\t\t                     \\_|_|_|_|_|_|_|_|\n\n");
-	printk(PRINTK_NOTIME "\t--- kernel panic (");
+	printk(PRINTK_FORCE "\t--- kernel panic (");
 	if (fmt) {
 		va_list ap;
 		va_start(ap, fmt);
 		vprintk(fmt, ap);
 		va_end(ap);
 	}
-	printk(PRINTK_NOTIME ") (moose-kernel v%d.%d.%d%s)  ---\n\t\t",
+	printk(PRINTK_FORCE ") (moose-kernel v%d.%d.%d%s)  ---\n\t\t",
 	       VER_MAJOR,
 	       VER_MINOR,
 	       VER_PATCH,
 	       VER_NOTE);
 
 	if (frame) {
-		printk(PRINTK_NOTIME "         vector=%llu (%s) error=%llx\n",
+		printk(PRINTK_FORCE "         vector=%llu (%s) error=%llx\n",
 		       frame->vector,
 		       _vec_name(frame->vector),
 		       frame->error_code);
-		printk(PRINTK_NOTIME "\trip=%.16llx  rsp=%.16llx rflags=%.16llx\n",
+		printk(PRINTK_FORCE "\trip=%.16llx  rsp=%.16llx rflags=%.16llx\n",
 		       frame->rip,
 		       frame->rsp,
 		       frame->rflags);
-		printk(PRINTK_NOTIME "\trax=%.16llx  rbx=%.16llx rcx=%.16llx\n",
+		printk(PRINTK_FORCE "\trax=%.16llx  rbx=%.16llx rcx=%.16llx\n",
 		       frame->rax,
 		       frame->rbx,
 		       frame->rcx);
-		printk(PRINTK_NOTIME "\trdx=%.16llx\n", frame->rdx);
-		printk(PRINTK_NOTIME "\trsi=%.16llx  rdi=%.16llx rbp=%.16llx\n",
+		printk(PRINTK_FORCE "\trdx=%.16llx\n", frame->rdx);
+		printk(PRINTK_FORCE "\trsi=%.16llx  rdi=%.16llx rbp=%.16llx\n",
 		       frame->rsi,
 		       frame->rdi,
 		       frame->rbp);
 		if (frame->vector == 14)
 			printk(
-			    PRINTK_NOTIME "\tcr2=%.16llx  cr3=%.16llx\n", read_cr2(), read_cr3());
+			    PRINTK_FORCE "\tcr2=%.16llx  cr3=%.16llx\n", read_cr2(), read_cr3());
 	}
 
-	printk(PRINTK_NOTIME "\n\t\t\t\t\t* system halted *\n");
-	printk(PRINTK_NOTIME "====================================================================="
+	printk(PRINTK_FORCE "\n\t\t\t\t\t* system halted *\n");
+	printk(PRINTK_FORCE "====================================================================="
 	                     "=====================\e[0m");
-	kconsole_set_fg(KCONSOLE_DEFAULT_FG);
-	printk(PRINTK_NOTIME "\n");
+	printk(PRINTK_FORCE "\n");
 	hcf();
 	__builtin_unreachable();
 }
