@@ -86,9 +86,9 @@ void panic(int_frame_t *frame, const char *fmt, ...)
 	printk(PRINTK_NOTIME "\n");
 	kconsole_set_fg(0x00FF0000); // pure red
 
-	printk(
-	    PRINTK_NOTIME
-	    "==================================================================================\n");
+	printk(PRINTK_NOTIME
+	       "\e[0;91m====================================================================="
+	       "=====================\n");
 	printk(PRINTK_NOTIME "\t\t\t           @@@@@@@@@@@@@@@@@@\n"
 	                     "\t\t\t         @@@@@@@@@@@@@@@@@@@@@@@\n"
 	                     "\t\t\t       @@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -136,10 +136,9 @@ void panic(int_frame_t *frame, const char *fmt, ...)
 			    PRINTK_NOTIME "\tcr2=%.16llx  cr3=%.16llx\n", read_cr2(), read_cr3());
 	}
 
-	printk(PRINTK_NOTIME "\n\t\t\t\t\t\t* system halted *\n");
-	printk(
-	    PRINTK_NOTIME
-	    "==================================================================================");
+	printk(PRINTK_NOTIME "\n\t\t\t\t\t* system halted *\n");
+	printk(PRINTK_NOTIME "====================================================================="
+	                     "=====================\e[0m");
 	kconsole_set_fg(KCONSOLE_DEFAULT_FG);
 	printk(PRINTK_NOTIME "\n");
 	hcf();
