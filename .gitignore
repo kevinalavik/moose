@@ -4,3 +4,4 @@
 *.hdd
 /compile_commands.json
 /.cache
+*.cpio

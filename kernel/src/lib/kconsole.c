@@ -56,7 +56,8 @@ static void _cursor(uint32_t c)
 	for (int y = 0; y < ASCII_FONT_HEIGHT; y++) {
 		fast_memset_row(_pixel_ptr(cx, cy + y), c, ASCII_FONT_WIDTH);
 		if (scroll_buf && cy + y < scroll_buf_rows)
-			fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx, c, ASCII_FONT_WIDTH);
+			fast_memset32(
+			    scroll_buf + (cy + y) * scroll_buf_stride + cx, c, ASCII_FONT_WIDTH);
 	}
 }
 
@@ -72,7 +73,8 @@ static void _scroll(void)
 		if (scroll_buf) {
 			for (uint64_t y = 0; y < scroll_buf_rows; y++)
 				fast_memcpy_row(scroll_buf + y * scroll_buf_stride,
-				                _pixel_ptr(0, y), scroll_buf_stride);
+				                _pixel_ptr(0, y),
+				                scroll_buf_stride);
 		}
 	}
 
@@ -82,9 +84,11 @@ static void _scroll(void)
 		fast_memcpy_row(scroll_buf, scroll_buf + row_pixels, copy_pixels);
 		uint64_t last_y = scroll_buf_rows - ASCII_FONT_HEIGHT;
 		for (uint64_t y = last_y; y < scroll_buf_rows; y++)
-			fast_memset32(scroll_buf + y * scroll_buf_stride, mapped_bg, scroll_buf_stride);
+			fast_memset32(
+			    scroll_buf + y * scroll_buf_stride, mapped_bg, scroll_buf_stride);
 		for (uint64_t y = 0; y < scroll_buf_rows; y++)
-			fast_memcpy_row(_pixel_ptr(0, y), scroll_buf + y * scroll_buf_stride,
+			fast_memcpy_row(_pixel_ptr(0, y),
+			                scroll_buf + y * scroll_buf_stride,
 			                scroll_buf_stride);
 	} else {
 		uint64_t row = (uint64_t)ASCII_FONT_HEIGHT * fb->pitch;
@@ -130,7 +134,9 @@ static void _drawch_xy(char ch, uint64_t x, uint64_t y)
 		}
 		fast_memcpy_row(_pixel_ptr(x, y + row), row_buf, ASCII_FONT_WIDTH);
 		if (scroll_buf && y + row < scroll_buf_rows)
-			fast_memcpy_row(scroll_buf + (y + row) * scroll_buf_stride + x, row_buf, ASCII_FONT_WIDTH);
+			fast_memcpy_row(scroll_buf + (y + row) * scroll_buf_stride + x,
+			                row_buf,
+			                ASCII_FONT_WIDTH);
 	}
 }
 
@@ -259,8 +265,10 @@ void kconsole_write(const char *s)
 					fast_memset_row(
 					    _pixel_ptr(cx, cy + y), mapped_bg, fill_pixels);
 					if (scroll_buf && cy + y < scroll_buf_rows)
-						fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx,
-						              mapped_bg, fill_pixels);
+						fast_memset32(scroll_buf +
+						                  (cy + y) * scroll_buf_stride + cx,
+						              mapped_bg,
+						              fill_pixels);
 				}
 				cx = new_cx;
 			} else {
@@ -270,8 +278,11 @@ void kconsole_write(const char *s)
 						fast_memset_row(
 						    _pixel_ptr(cx, cy + y), mapped_bg, tail);
 						if (scroll_buf && cy + y < scroll_buf_rows)
-							fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx,
-							              mapped_bg, tail);
+							fast_memset32(
+							    scroll_buf +
+							        (cy + y) * scroll_buf_stride + cx,
+							    mapped_bg,
+							    tail);
 					}
 				cx = 0;
 				cy += ASCII_FONT_HEIGHT;

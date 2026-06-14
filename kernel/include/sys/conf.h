@@ -6,6 +6,7 @@
 
 enum conf_type {
 	CONF_BOOL,
+	CONF_STR,
 };
 
 struct conf_entry {
@@ -16,6 +17,7 @@ struct conf_entry {
 
 struct kernel_conf {
 	bool kconsole;
+	char *rootfs;
 };
 
 extern struct kernel_conf kernel_conf;

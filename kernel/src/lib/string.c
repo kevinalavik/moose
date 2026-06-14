@@ -1,6 +1,7 @@
 #include <lib/string.h>
 #include <stdint.h>
 #include <arch/fastmem.h>
+#include <mm/heap.h>
 
 void *memcpy(void *dst, const void *src, size_t n)
 {
@@ -98,4 +99,62 @@ int strcasecmp(const char *a, const char *b)
 		b++;
 	}
 	return (unsigned char)*a - (unsigned char)*b;
+}
+
+char *strdup(const char *s)
+{
+	size_t len;
+	char *out;
+
+	if (!s)
+		return NULL;
+
+	len = strlen(s) + 1;
+
+	out = kmalloc(len);
+	if (!out)
+		return NULL;
+
+	memcpy(out, s, len);
+
+	return out;
+}
+
+int strncmp(const char *a, const char *b, size_t n)
+{
+	size_t i = 0;
+
+	if (n == 0)
+		return 0;
+
+	while (i < n && a[i] && b[i]) {
+		if (a[i] != b[i])
+			return (unsigned char)a[i] - (unsigned char)b[i];
+		i++;
+	}
+
+	if (i == n)
+		return 0;
+
+	return (unsigned char)a[i] - (unsigned char)b[i];
+}
+
+char *strstr(const char *haystack, const char *needle)
+{
+	size_t i, j;
+
+	if (!*needle)
+		return (char *)haystack;
+
+	for (i = 0; haystack[i]; i++) {
+		for (j = 0; needle[j]; j++) {
+			if (haystack[i + j] != needle[j])
+				break;
+		}
+
+		if (!needle[j])
+			return (char *)&haystack[i];
+	}
+
+	return NULL;
 }

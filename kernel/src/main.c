@@ -24,6 +24,7 @@
 #include <sys/apic.h>
 #include <dev/pit.h>
 #include <sys/conf.h>
+#include <fs/rootfs.h>
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
 
@@ -168,6 +169,9 @@ void kernel_entry(void)
 	/* setup apic */
 	apic_init();
 
+	/* setup rootfs */
+	rootfs_init();
+
 	/* setup pit timer */
 	pit_init();
 
@@ -181,8 +185,6 @@ void kernel_entry(void)
 		kconsole_deinit();
 
 	struct limine_framebuffer *fb = fb_request.response->framebuffers[0];
-	uint32_t flanterm_bg = KCONSOLE_DEFAULT_BG;
-	uint32_t flanterm_fg = KCONSOLE_DEFAULT_FG;
 	ft_ctx = flanterm_fb_init(kmalloc,
 	                          flanterm_kfree,
 	                          fb->address,
@@ -198,8 +200,8 @@ void kernel_entry(void)
 	                          NULL,
 	                          NULL,
 	                          NULL,
-	                          &flanterm_bg,
-	                          &flanterm_fg,
+	                          NULL,
+	                          NULL,
 	                          NULL,
 	                          NULL,
 	                          (void *)ascii_font,
@@ -210,6 +212,7 @@ void kernel_entry(void)
 	                          0,
 	                          0,
 	                          0);
+
 
 	/* just a bunch off wack*/
 	printk("tty0 on moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);

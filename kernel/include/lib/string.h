@@ -13,5 +13,8 @@ char *strncpy(char *dst, const char *src, size_t n);
 int strcmp(const char *a, const char *b);
 int isspace(int c);
 int strcasecmp(const char *a, const char *b);
+char *strdup(const char *s);
+int strncmp(const char *a, const char *b, size_t n);
+char *strstr(const char *haystack, const char *needle);
 
 #endif // LIB_STRING_H
