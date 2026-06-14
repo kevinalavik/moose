@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <arch/fastmem.h>
+#include <mm/heap.h>
 #define ASCII_FONT_IMPLEMENTATION
 #include <extra/ascii_font.h>
 
@@ -15,6 +16,10 @@ static uint32_t col_bg = KCONSOLE_DEFAULT_BG;
 static uint32_t mapped_fg;
 static uint32_t mapped_bg;
 static uint32_t mapped_cursor;
+
+static uint32_t *scroll_buf;
+static size_t scroll_buf_rows;
+static size_t scroll_buf_stride;
 
 static inline uint32_t _map_rgb(uint32_t rgb)
 {
@@ -48,20 +53,46 @@ static inline uint32_t *_pixel_ptr(uint64_t x, uint64_t y)
 
 static void _cursor(uint32_t c)
 {
-	for (int y = 0; y < ASCII_FONT_HEIGHT; y++)
+	for (int y = 0; y < ASCII_FONT_HEIGHT; y++) {
 		fast_memset_row(_pixel_ptr(cx, cy + y), c, ASCII_FONT_WIDTH);
+		if (scroll_buf && cy + y < scroll_buf_rows)
+			fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx, c, ASCII_FONT_WIDTH);
+	}
 }
 
 
 static void _scroll(void)
 {
 	uint64_t text_h = fb->height - ASCII_FONT_HEIGHT;
-	uint64_t row = (uint64_t)ASCII_FONT_HEIGHT * fb->pitch;
-	uint64_t copy = (text_h * fb->pitch) - row;
-	fast_memcpy_fwd(fb->address, (uint8_t *)fb->address + row, copy);
-	uint64_t last_y = text_h - ASCII_FONT_HEIGHT;
-	for (uint64_t y = last_y; y < text_h; y++) {
-		fast_memset_row(_pixel_ptr(0, y), mapped_bg, fb->width);
+
+	if (!scroll_buf) {
+		scroll_buf_rows = text_h;
+		scroll_buf_stride = fb->width;
+		scroll_buf = kmalloc(scroll_buf_rows * scroll_buf_stride * sizeof(uint32_t));
+		if (scroll_buf) {
+			for (uint64_t y = 0; y < scroll_buf_rows; y++)
+				fast_memcpy_row(scroll_buf + y * scroll_buf_stride,
+				                _pixel_ptr(0, y), scroll_buf_stride);
+		}
+	}
+
+	if (scroll_buf) {
+		uint64_t row_pixels = (uint64_t)ASCII_FONT_HEIGHT * scroll_buf_stride;
+		uint64_t copy_pixels = (scroll_buf_rows * scroll_buf_stride) - row_pixels;
+		fast_memcpy_row(scroll_buf, scroll_buf + row_pixels, copy_pixels);
+		uint64_t last_y = scroll_buf_rows - ASCII_FONT_HEIGHT;
+		for (uint64_t y = last_y; y < scroll_buf_rows; y++)
+			fast_memset32(scroll_buf + y * scroll_buf_stride, mapped_bg, scroll_buf_stride);
+		for (uint64_t y = 0; y < scroll_buf_rows; y++)
+			fast_memcpy_row(_pixel_ptr(0, y), scroll_buf + y * scroll_buf_stride,
+			                scroll_buf_stride);
+	} else {
+		uint64_t row = (uint64_t)ASCII_FONT_HEIGHT * fb->pitch;
+		uint64_t copy = (text_h * fb->pitch) - row;
+		fast_memcpy_fwd(fb->address, (uint8_t *)fb->address + row, copy);
+		uint64_t last_y = text_h - ASCII_FONT_HEIGHT;
+		for (uint64_t y = last_y; y < text_h; y++)
+			fast_memset_row(_pixel_ptr(0, y), mapped_bg, fb->width);
 	}
 
 	if (cy >= ASCII_FONT_HEIGHT)
@@ -98,6 +129,8 @@ static void _drawch_xy(char ch, uint64_t x, uint64_t y)
 			}
 		}
 		fast_memcpy_row(_pixel_ptr(x, y + row), row_buf, ASCII_FONT_WIDTH);
+		if (scroll_buf && y + row < scroll_buf_rows)
+			fast_memcpy_row(scroll_buf + (y + row) * scroll_buf_stride + x, row_buf, ASCII_FONT_WIDTH);
 	}
 }
 
@@ -170,6 +203,9 @@ void kconsole_init(struct limine_framebuffer *f)
 {
 	fb = f;
 	cx = cy = 0;
+	scroll_buf = NULL;
+	scroll_buf_rows = 0;
+	scroll_buf_stride = 0;
 	_refresh_mapped_colors();
 	for (uint64_t y = 0; y < fb->height; y++) {
 		fast_memset_row(_pixel_ptr(0, y), mapped_bg, fb->width);
@@ -181,6 +217,10 @@ void kconsole_deinit(void)
 {
 	if (!fb)
 		return;
+	if (scroll_buf) {
+		kfree(scroll_buf);
+		scroll_buf = NULL;
+	}
 	for (uint64_t y = 0; y < fb->height; y++)
 		fast_memset_row(_pixel_ptr(0, y), 0, fb->width);
 	fb = NULL;
@@ -215,16 +255,24 @@ void kconsole_write(const char *s)
 			unsigned long new_cx = next_col * ASCII_FONT_WIDTH;
 			unsigned long fill_pixels = new_cx - cx;
 			if (new_cx < fb->width && fill_pixels > 0) {
-				for (int y = 0; y < ASCII_FONT_HEIGHT; y++)
+				for (int y = 0; y < ASCII_FONT_HEIGHT; y++) {
 					fast_memset_row(
 					    _pixel_ptr(cx, cy + y), mapped_bg, fill_pixels);
+					if (scroll_buf && cy + y < scroll_buf_rows)
+						fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx,
+						              mapped_bg, fill_pixels);
+				}
 				cx = new_cx;
 			} else {
 				unsigned long tail = fb->width - cx;
 				if (tail > 0)
-					for (int y = 0; y < ASCII_FONT_HEIGHT; y++)
+					for (int y = 0; y < ASCII_FONT_HEIGHT; y++) {
 						fast_memset_row(
 						    _pixel_ptr(cx, cy + y), mapped_bg, tail);
+						if (scroll_buf && cy + y < scroll_buf_rows)
+							fast_memset32(scroll_buf + (cy + y) * scroll_buf_stride + cx,
+							              mapped_bg, tail);
+					}
 				cx = 0;
 				cy += ASCII_FONT_HEIGHT;
 			}

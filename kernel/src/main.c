@@ -212,12 +212,7 @@ void kernel_entry(void)
 	                          0);
 
 	printk("hello from flanterm!\n");
-	printk("\033[2J\033[H\033[1mANSI/VT100 TEST\033[0m\n\n\033[31mRED \033[32mGREEN "
-	       "\033[33mYELLOW \033[34mBLUE \033[35mMAGENTA \033[36mCYAN "
-	       "\033[37mWHITE\033[0m\n\n\033[1mBOLD\033[0m \033[4mUNDERLINE\033[0m "
-	       "\033[7mREVERSE\033[0m\n\n\033[41m RED BG \033[42m GREEN BG \033[44m BLUE BG "
-	       "\033[0m\n\n\033[10C<- cursor moved 10\n\033[2Kline erase "
-	       "test\n\033[H\033[?25lHidden cursor (2s)...\n");
+
 	/* enable interrupts and halt */
 	sti();
 	hcf();
