@@ -211,7 +211,8 @@ void kernel_entry(void)
 	                          0,
 	                          0);
 
-	printk("hello from flanterm!\n");
+	/* just a bunch off wack*/
+	printk("tty0 on moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
 
 	/* enable interrupts and halt */
 	sti();
