@@ -1,7 +1,7 @@
 .SUFFIXES:
 override IMAGE_NAME := moose
 
-QEMUFLAGS := -m 2G -debugcon stdio -accel kvm -cpu host,+invtsc
+QEMUFLAGS := -m 2G -debugcon stdio -accel kvm -cpu host,+invtsc -audiodev pa,id=speaker -machine pcspk-audiodev=speaker
 
 HOST_CC := cc
 HOST_CFLAGS := -g -O2 -pipe

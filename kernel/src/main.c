@@ -1,3 +1,4 @@
+#include "uacpi/kernel_api.h"
 #include <boot/limine.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -29,6 +30,7 @@
 #include <fs/rootfs.h>
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
+#include <arch/io.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
