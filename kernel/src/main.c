@@ -83,6 +83,7 @@ void kernel_entry(void)
 		                          NULL,
 		                          NULL,
 		                          (void *)ascii_font,
+		                          ASCII_FONT_COUNT,
 		                          ASCII_FONT_WIDTH,
 		                          ASCII_FONT_HEIGHT,
 		                          0,
@@ -210,6 +211,8 @@ void kernel_entry(void)
 	       VER_MINOR,
 	       VER_PATCH,
 	       VER_NOTE);
+
+	printk("åäö\n");
 
 	/* enable interrupts and halt */
 	sti();
