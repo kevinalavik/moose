@@ -1,4 +1,3 @@
-#include "lib/math.h"
 #include <mm/heap.h>
 #include <mm/slab.h>
 #include <mm/large.h>
@@ -7,6 +6,7 @@
 #include <sys/panic.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <lib/math.h>
 
 #define HEAP_NUM_CLASSES 8
 static const size_t heap_size_classes[HEAP_NUM_CLASSES] = {
@@ -30,9 +30,9 @@ void heap_init(void)
 			panic(NULL, "heap: failed to create kmalloc cache (class %d)", i);
 	}
 
-	log("mm: kernel heap initialised (slab classes 16..%u bytes, large up to %u)\n",
-	       heap_size_classes[HEAP_NUM_CLASSES - 1],
-	       LARGE_MAX_SIZE);
+	log("mm: kernel heap initialised (slab classes 16..%u bytes, large allocations "
+	    "backed by individually-mapped pages)\n",
+	    heap_size_classes[HEAP_NUM_CLASSES - 1]);
 }
 
 static inline int size_class_index(size_t size)

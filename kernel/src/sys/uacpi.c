@@ -23,11 +23,6 @@ struct uacpi_spinlock {
 	spinlock_t lock;
 };
 
-void uacpi_early_init(void)
-{
-	tsc_calibrate();
-}
-
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
 {
 	if (!out_rsdp_address)

@@ -54,7 +54,6 @@ void kernel_entry(void)
 		hcf();
 	}
 
-	tsc_calibrate();
 	conf_parse(cmdline_request.response->cmdline);
 
 	struct limine_framebuffer *fb = NULL;
@@ -93,8 +92,10 @@ void kernel_entry(void)
 
 	log("boot: moose-kernel v%d.%d.%d%s\n", VER_MAJOR, VER_MINOR, VER_PATCH, VER_NOTE);
 	if (fb)
-		log("boot: using framebuffer0 for earlycon (%dx%d)\n", fb->width, fb->height);
+		log("boot: using framebuffer0 for tty (%dx%d)\n", fb->width, fb->height);
 	log("boot: running on a %s\n", get_cpu_string());
+
+	tsc_calibrate();
 
 	/* setup gdt and interrupts */
 	gdt_init();
@@ -151,6 +152,7 @@ void kernel_entry(void)
 	log("test: vmap returned %p\n", (void *)addr);
 	*addr = 0xC0FFEE;
 	log("test: wrote 0x%llx to %p, read back 0x%llx\n", (uint64_t)0xC0FFEE, addr, *addr);
+
 
 	/* cleanup */
 	while (kvctx.vma_list)

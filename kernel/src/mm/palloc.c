@@ -51,6 +51,9 @@ page_t *palloc_contiguous(size_t count)
 	if (count == 1)
 		return palloc();
 
+	if (count > max_pfn)
+		return NULL;
+
 	for (uint64_t pfn = 0; pfn <= max_pfn - count; pfn++) {
 		if (!(mem_map[pfn].flags & PAGE_FREE))
 			continue;

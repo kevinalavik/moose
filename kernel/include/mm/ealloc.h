@@ -7,8 +7,7 @@
 
 struct limine_memmap_response;
 
-#define EALLOC_MAX_REGIONS 32
-#define EALLOC_MAX_RESERVED 64
+#define EALLOC_MAX_REGIONS 64
 
 void ealloc_init(struct limine_memmap_response *memmap);
 void *ealloc(size_t size);

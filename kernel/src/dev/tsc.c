@@ -35,7 +35,6 @@ static void set_cyc2ns_scale(uint64_t khz)
 {
 	uint32_t mul, shift, s;
 	uint64_t tsc_now = rdtsc();
-	uint64_t ns_now = (uint64_t)((__uint128_t)tsc_now * 1000000000ULL / (khz * KHZ));
 
 	for (s = 32; s > 0; s--) {
 		uint64_t tmp = (1000000ULL << s) / khz;
@@ -53,7 +52,15 @@ done:
 		mul >>= 1;
 	}
 
-	cyc2ns.offset = ns_now - (uint64_t)(((__uint128_t)tsc_now * mul) >> shift);
+	/*
+	 * The TSC counts from CPU reset/power-on, not from kernel entry -
+	 * on real hardware, firmware and the bootloader can leave the TSC
+	 * at a large value (multiple seconds' worth of cycles) by the time
+	 * we get here. We want tsc_to_ns() to report time since this
+	 * calibration point (kernel uptime), so the TSC value read right
+	 * now must map to ns=0: subtract its scaled value from the offset.
+	 */
+	cyc2ns.offset = (uint64_t)0 - (uint64_t)(((__uint128_t)tsc_now * mul) >> shift);
 	cyc2ns.mul = mul;
 	cyc2ns.shift = shift;
 }

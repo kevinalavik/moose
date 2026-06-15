@@ -9,6 +9,7 @@
 struct ealloc_region {
 	uint64_t base;
 	uint64_t length;
+	uint64_t used; /* high-water mark of bytes handed out from this region */
 };
 
 static struct ealloc_region regions[EALLOC_MAX_REGIONS];
@@ -16,9 +17,6 @@ static size_t region_count;
 
 static size_t cur_region;
 static uint64_t cur_offset;
-
-static struct ealloc_region reserved[EALLOC_MAX_RESERVED];
-static size_t reserved_count;
 
 static inline uintptr_t align_up(uintptr_t x, uintptr_t align)
 {
@@ -31,7 +29,6 @@ void ealloc_init(struct limine_memmap_response *memmap)
 	region_count = 0;
 	cur_region = 0;
 	cur_offset = 0;
-	reserved_count = 0;
 
 	for (uint64_t i = 0; i < memmap->entry_count; i++) {
 		struct limine_memmap_entry *m = memmap->entries[i];
@@ -60,6 +57,7 @@ void ealloc_init(struct limine_memmap_response *memmap)
 
 		regions[region_count].base = base;
 		regions[region_count].length = length;
+		regions[region_count].used = 0;
 		region_count++;
 	}
 
@@ -67,29 +65,7 @@ void ealloc_init(struct limine_memmap_response *memmap)
 		panic(NULL, "failed to find usable memory for early allocator");
 
 	log("mm: ealloc: %llu usable region(s) available for early allocation\n",
-	       (unsigned long long)region_count);
-}
-
-static void ealloc_record(uint64_t phys, uint64_t size)
-{
-	if (reserved_count >= EALLOC_MAX_RESERVED) {
-		log("mm: ealloc: too many early allocations to track, "
-		       "pfn database reservations may be incomplete\n");
-		return;
-	}
-
-	if (reserved_count > 0) {
-		struct ealloc_region *prev = &reserved[reserved_count - 1];
-
-		if (prev->base + prev->length == phys) {
-			prev->length += size;
-			return;
-		}
-	}
-
-	reserved[reserved_count].base = phys;
-	reserved[reserved_count].length = size;
-	reserved_count++;
+	    (unsigned long long)region_count);
 }
 
 void *ealloc_aligned(size_t size, size_t align)
@@ -106,7 +82,18 @@ void *ealloc_aligned(size_t size, size_t align)
 			uint64_t phys = r->base + off;
 
 			cur_offset = off + size;
-			ealloc_record(phys, size);
+
+			/*
+			 * Track the high-water mark of bytes consumed from
+			 * this region. Everything from r->base up to
+			 * r->used is considered reserved, regardless of any
+			 * alignment gaps - this avoids needing to track each
+			 * individual allocation separately, which can
+			 * overflow on real hardware with many usable memmap
+			 * regions.
+			 */
+			if (cur_offset > r->used)
+				r->used = cur_offset;
 
 			void *ptr = phys_to_virt(phys);
 
@@ -129,11 +116,33 @@ void *ealloc(size_t size)
 
 size_t ealloc_reserved_count(void)
 {
-	return reserved_count;
+	size_t count = 0;
+
+	for (size_t i = 0; i < region_count; i++) {
+		if (regions[i].used > 0)
+			count++;
+	}
+
+	return count;
 }
 
 void ealloc_reserved_range(size_t idx, uint64_t *base, uint64_t *length)
 {
-	*base = reserved[idx].base;
-	*length = reserved[idx].length;
+	size_t seen = 0;
+
+	for (size_t i = 0; i < region_count; i++) {
+		if (regions[i].used == 0)
+			continue;
+
+		if (seen == idx) {
+			*base = regions[i].base;
+			*length = regions[i].used;
+			return;
+		}
+
+		seen++;
+	}
+
+	*base = 0;
+	*length = 0;
 }
