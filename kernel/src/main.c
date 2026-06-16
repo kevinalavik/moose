@@ -212,7 +212,6 @@ void kernel_entry(void)
 	       VER_PATCH,
 	       VER_NOTE);
 
-	printk("åäö\n");
 
 	/* enable interrupts and halt */
 	sti();
