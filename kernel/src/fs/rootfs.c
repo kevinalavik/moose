@@ -10,6 +10,7 @@ extern volatile struct limine_module_request mod_request;
 static void cpio_handle(struct limine_file *mod)
 {
 	log("fs: cpio archive at %s (%llu bytes)\n", mod->path, mod->size);
+	// todO: parse cpio archive into rootfs
 }
 
 static void ramfs_handle(void)

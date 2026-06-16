@@ -3,4 +3,4 @@
 
 void rootfs_init(void);
 
-#endif
+#endif // FS_ROOTFS_H
