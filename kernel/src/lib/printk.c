@@ -4,9 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/conf.h>
+#include <sys/spinlock.h>
 #include <dev/tsc.h>
 
 extern void putc(char);
+
+static spinlock_t log_lock;
 
 static const char *_parse_width(const char *fmt, int *width, int *zero)
 {
@@ -268,6 +271,8 @@ static void _vprint(const char *fmt, va_list list)
 
 void printk(const char *fmt, ...)
 {
+	unsigned long flags = spin_lock_irqsave(&log_lock);
+
 	va_list list;
 	va_start(list, fmt);
 
@@ -279,12 +284,20 @@ void printk(const char *fmt, ...)
 	_buf_i = 0;
 	_vprint(fmt, list);
 	va_end(list);
+
+	spin_unlock_irqrestore(&log_lock, flags);
 }
 
 void log(const char *fmt, ...)
 {
+	unsigned long flags = spin_lock_irqsave(&log_lock);
+
 	if (kernel_conf.quiet)
 		_log_allow_fb = false;
+
+	if (!kernel_conf.quiet) {
+		_printstr("\033[90m", 0, false);
+	}
 
 	va_list ap;
 	va_start(ap, fmt);
@@ -304,6 +317,12 @@ void log(const char *fmt, ...)
 	vprintk(fmt, ap);
 	va_end(ap);
 	_log_allow_fb = true;
+
+	if (!kernel_conf.quiet) {
+		_printstr("\033[0m", 0, false);
+	}
+
+	spin_unlock_irqrestore(&log_lock, flags);
 }
 
 void vprintk(const char *fmt, va_list ap)
@@ -316,6 +335,10 @@ void vprintk(const char *fmt, va_list ap)
 
 int vsnprintk(char *buf, size_t len, const char *fmt, va_list ap)
 {
+	char *saved_buf = _buf;
+	size_t saved_len = _buf_len;
+	size_t saved_i = _buf_i;
+
 	_buf = buf;
 	_buf_len = len;
 	_buf_i = 0;
@@ -327,7 +350,13 @@ int vsnprintk(char *buf, size_t len, const char *fmt, va_list ap)
 	if (buf)
 		buf[_buf_i < len ? _buf_i : len - 1] = '\0';
 
-	return (int)_buf_i;
+	int r = (int)_buf_i;
+
+	_buf = saved_buf;
+	_buf_len = saved_len;
+	_buf_i = saved_i;
+
+	return r;
 }
 
 int snprintk(char *buf, size_t len, const char *fmt, ...)

@@ -1,16 +1,18 @@
 #include <fs/rootfs.h>
+#include <fs/cpio.h>
 #include <lib/printk.h>
 #include <lib/string.h>
 #include <sys/panic.h>
 #include <sys/conf.h>
 #include <boot/limine.h>
+#include <mm/pfn.h>
 
 extern volatile struct limine_module_request mod_request;
 
 static void cpio_handle(struct limine_file *mod)
 {
 	log("fs: cpio archive at %s (%llu bytes)\n", mod->path, mod->size);
-	// todO: parse cpio archive into rootfs
+	cpio_parse((void *)mod->address, (size_t)mod->size);
 }
 
 static void ramfs_handle(void)

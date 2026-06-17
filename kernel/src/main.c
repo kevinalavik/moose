@@ -31,11 +31,27 @@
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
 #include <arch/io.h>
+#include <fs/vfs.h>
+#include <fs/tmpfs.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
 struct flanterm_context *ft_ctx = NULL;
 bool _log_allow_fb = true;
+static const cred_t _root_cred = {.uid = 0, .gid = 0};
+
+#define CAT_FILE(path)                                                                             \
+	do {                                                                                       \
+		int _err = 0;                                                                      \
+		file_t *_f = vfs_open(path, O_RDONLY, 0, &_root_cred, &_err);                      \
+		if (_f) {                                                                          \
+			char _buf[256];                                                            \
+			memset(_buf, 0, sizeof(_buf));                                             \
+			vfs_read(_f, _buf, sizeof(_buf) - 1);                                      \
+			printk(path ": %s\n", _buf);                                               \
+			vfs_close(_f);                                                             \
+		}                                                                                  \
+	} while (0)
 
 void putc(char ch)
 {
@@ -194,8 +210,14 @@ void kernel_entry(void)
 	/* setup apic */
 	apic_init();
 
-	/* setup rootfs */
+	/* setup fs*/
+	vfs_init();
+	tmpfs_init();
+	vfs_mount("tmpfs", "/", NULL);
 	rootfs_init();
+
+	CAT_FILE("/test.txt");
+	CAT_FILE("/subdir/abc.txt");
 
 	/* setup pit timer */
 	pit_init();
