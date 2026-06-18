@@ -11,16 +11,10 @@ extern void putc(char);
 
 static spinlock_t log_lock;
 
-static const char *_parse_width(const char *fmt, int *width, int *zero, int *left)
+static const char *_parse_width(const char *fmt, int *width, int *zero)
 {
 	*width = 0;
 	*zero = 0;
-	*left = 0;
-
-	if (*fmt == '-') {
-		*left = 1;
-		fmt++;
-	}
 
 	if (*fmt == '0') {
 		*zero = 1;
@@ -79,23 +73,8 @@ static void _putc(char c)
 	_buf_i++;
 }
 
-void _printstr(const char *v, int prec, bool has_prec, int width, bool left)
+void _printstr(const char *v, int prec, bool has_prec)
 {
-	int len = 0;
-	const char *p = v;
-	if (!has_prec) {
-		while (*p++)
-			len++;
-	} else {
-		while (len < prec && *p++)
-			len++;
-	}
-	int pad = (width > len) ? width - len : 0;
-
-	if (!left)
-		for (int i = 0; i < pad; i++)
-			_putc(' ');
-
 	if (!has_prec) {
 		while (*v)
 			_putc(*v++);
@@ -103,13 +82,9 @@ void _printstr(const char *v, int prec, bool has_prec, int width, bool left)
 		for (int i = 0; i < prec && *v; i++)
 			_putc(*v++);
 	}
-
-	if (left)
-		for (int i = 0; i < pad; i++)
-			_putc(' ');
 }
 
-void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding, bool zero_pad)
+void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding)
 {
 	unsigned long digits = 1;
 	int64_t tmp = v;
@@ -143,7 +118,7 @@ void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding
 	}
 
 	while (padding > digits + (unsigned long)neg) {
-		_putc(zero_pad ? '0' : ' ');
+		_putc('0');
 		padding--;
 	}
 
@@ -152,21 +127,21 @@ void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding
 
 	if (base == 10) {
 		if (v >= 10)
-			_printnumber(base, false, v / 10, 0, 0);
+			_printnumber(base, false, v / 10, 0);
 		_putc((char)((v % 10) + '0'));
 	}
 
 	if (base == 8) {
 		uint64_t uv = (uint64_t)v;
 		if (uv >= 8)
-			_printnumber(base, false, (int64_t)(uv / 8), 0, 0);
+			_printnumber(base, false, (int64_t)(uv / 8), 0);
 		_putc((char)((uv % 8) + '0'));
 	}
 
 	if (base == 16) {
 		uint64_t uv = (uint64_t)v;
 		if (uv >= 16)
-			_printnumber(base, false, (int64_t)(uv / 16), 0, 0);
+			_printnumber(base, false, (int64_t)(uv / 16), 0);
 
 		unsigned int x = uv % 16;
 		_putc(x < 10 ? (char)(x + '0') : (char)(x - 10 + 'a'));
@@ -209,8 +184,8 @@ static void _vprint(const char *fmt, va_list list)
 
 		fmt++;
 
-		int width, zero, left;
-		fmt = _parse_width(fmt, &width, &zero, &left);
+		int width, zero;
+		fmt = _parse_width(fmt, &width, &zero);
 
 		int prec;
 		bool has_prec, prec_star;
@@ -232,7 +207,7 @@ static void _vprint(const char *fmt, va_list list)
 			const char *v = va_arg(list, const char *);
 			if (!v)
 				v = "(null)";
-			_printstr(v, prec, has_prec, width, (bool)left);
+			_printstr(v, prec, has_prec);
 			fmt++;
 			break;
 		}
@@ -246,7 +221,7 @@ static void _vprint(const char *fmt, va_list list)
 			else
 				v = va_arg(list, int);
 			unsigned long pad = has_prec ? (unsigned long)prec : (unsigned long)width;
-			_printnumber(10, true, v, pad, 0);
+			_printnumber(10, true, v, pad);
 			fmt++;
 			break;
 		}
@@ -260,7 +235,7 @@ static void _vprint(const char *fmt, va_list list)
 			else
 				v = va_arg(list, unsigned int);
 			unsigned long pad = has_prec ? (unsigned long)prec : (unsigned long)width;
-			_printnumber(10, false, (int64_t)v, pad, 0);
+			_printnumber(10, false, (int64_t)v, pad);
 			fmt++;
 			break;
 		}
@@ -274,7 +249,7 @@ static void _vprint(const char *fmt, va_list list)
 			else
 				v = va_arg(list, unsigned int);
 			unsigned long pad = has_prec ? (unsigned long)prec : (unsigned long)width;
-			_printnumber(8, false, (int64_t)v, pad, 0);
+			_printnumber(8, false, (int64_t)v, pad);
 			fmt++;
 			break;
 		}
@@ -289,7 +264,7 @@ static void _vprint(const char *fmt, va_list list)
 				v = va_arg(list, unsigned int);
 
 			unsigned long pad = has_prec ? (unsigned long)prec : (unsigned long)width;
-			_printnumber(16, false, (int64_t)v, pad, 0);
+			_printnumber(16, false, (int64_t)v, pad);
 			fmt++;
 			break;
 		}
@@ -352,7 +327,6 @@ void log(const char *fmt, ...)
 	if (kernel_conf.quiet)
 		_log_allow_fb = false;
 
-	_printstr("\033[90m", 0, false, 0, false);
 	va_list ap;
 	va_start(ap, fmt);
 	if (tsc_hz != 0) {
@@ -360,18 +334,17 @@ void log(const char *fmt, ...)
 		uint64_t secs = ns / 1000000000ULL;
 		uint64_t msecs = (ns / 1000000ULL) % 1000ULL;
 		_putc('[');
-		_printnumber(10, false, secs, 0, 0);
+		_printnumber(10, false, secs, 0);
 		_putc('.');
-		_printnumber(10, false, msecs, 3, 0);
+		_printnumber(10, false, msecs, 3);
 		_putc(']');
 		_putc(' ');
 	} else {
-		_printstr("[0.000] ", 0, false, 0, false);
+		_printstr("[0.000] ", 0, false);
 	}
 	vprintk(fmt, ap);
 	va_end(ap);
 	_log_allow_fb = true;
-	_printstr("\033[0m", 0, false, 0, false);
 	spin_unlock_irqrestore(&log_lock, flags);
 }
 

@@ -255,20 +255,17 @@ void kernel_entry(void)
 		for (int i = 0; i < TTY_MAX; i++) {
 			char buf[512];
 
-			int n = snprintk(
-			    buf,
-			    sizeof(buf),
-			    " _ __ ___   ___   ___   ___   ___   ___   ___  ___  ___ \n"
-			    "| '_ ` _ \\ / _ \\ / _ \\ / _ \\ / _ \\ / _ \\ / _ \\/ __|/ _ \\\n"
-			    "| | | | | | (_) | (_) | (_) | (_) | (_) | (_) \\__ \\  __/\n"
-			    "|_| |_| |_|\\___/ \\___/ \\___/ \\___/ \\___/ \\___/|___/\\___|\n"
-			    "--------------------------------------------------------\n"
-			    "moose-kernel v%d.%d.%d%s on tty%d (no init, ECHO however)\n\n",
-			    VER_MAJOR,
-			    VER_MINOR,
-			    VER_PATCH,
-			    VER_NOTE,
-			    i);
+			int n =
+			    snprintk(buf,
+			             sizeof(buf),
+			             "moose-kernel v%d.%d.%d%s on tty%d (no init, ECHO however)\n"
+			             "-------------------------------------------------------------"
+			             "---------\n",
+			             VER_MAJOR,
+			             VER_MINOR,
+			             VER_PATCH,
+			             VER_NOTE,
+			             i);
 
 			if (n > 0) {
 				char path[16];
