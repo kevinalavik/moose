@@ -35,6 +35,9 @@ SECTIONS
         __rodata_start = .;
         *(.rodata .rodata.*)
         . = ALIGN(8);
+        __driver_init_start = .;
+        KEEP(*(.driver_init))
+        __driver_init_end = .;
         __rodata_end = .;
     } :rodata
 

@@ -5,6 +5,7 @@
 #define ASCII_FONT_IMPLEMENTATION
 #include <extra/ascii_font.h>
 #include <dev/debugcon.h>
+#include <drivers/driver.h>
 #include <arch/cpu.h>
 #include <arch/cpuid.h>
 #include <lib/printk.h>
@@ -33,6 +34,11 @@
 #include <arch/io.h>
 #include <fs/vfs.h>
 #include <fs/tmpfs.h>
+#include <fs/devtmpfs.h>
+#include <dev/chrdev.h>
+#include <dev/device.h>
+#include <dev/acpi_bus.h>
+#include <dev/tty.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
@@ -59,8 +65,13 @@ void putc(char ch)
 		putc('\r');
 	char s[2] = {ch, '\0'};
 	dbg_write(s);
-	if (ft_ctx && _log_allow_fb)
+
+	tty_t *active = tty_get_active();
+	if (active && active->ft_ctx && _log_allow_fb) {
+		flanterm_write(active->ft_ctx, s, 1);
+	} else if (ft_ctx && _log_allow_fb) {
 		flanterm_write(ft_ctx, s, 1);
+	}
 }
 
 void kernel_entry(void)
@@ -162,6 +173,9 @@ void kernel_entry(void)
 		kfree(a);
 	}
 
+	/* init device model */
+	device_model_init();
+
 	/* setup kernel VMA ctx and test anon write*/
 	vctx_t kvctx;
 	vinit(&kvctx, (ptable_t *)phys_to_virt((uint64_t)kernel_ptable));
@@ -204,17 +218,30 @@ void kernel_entry(void)
 		}
 	}
 
+	/* init ACPI bus and enumerate devices */
+	acpi_bus_init();
+	acpi_bus_enumerate();
+
 	/* list devices */
 	pci_scan();
 
 	/* setup apic */
 	apic_init();
 
+	/* init all drivers */
+	drivers_init();
+
 	/* setup fs*/
 	vfs_init();
 	tmpfs_init();
 	vfs_mount("tmpfs", "/", NULL);
 	rootfs_init();
+
+	/* setup /dev */
+	chrdev_init();
+	devtmpfs_init();
+	vfs_mkdir("/dev", 0755, &_root_cred);
+	vfs_mount("devtmpfs", "/dev", NULL);
 
 	CAT_FILE("/test.txt");
 	CAT_FILE("/subdir/abc.txt");
@@ -228,7 +255,30 @@ void kernel_entry(void)
 	    VER_PATCH,
 	    VER_NOTE);
 
-	printk("Hello on tty0 on moose-kernel v%d.%d.%d%s\n",
+	/* setup new tty */
+	if (ft_ctx) {
+		flanterm_deinit(ft_ctx, NULL);
+		ft_ctx = NULL;
+	}
+
+	if (fb) {
+		kernel_conf.quiet = true; /* dont fill the tty with kernel logs by default */
+		tty_init(fb->address,
+		         fb->width,
+		         fb->height,
+		         fb->pitch,
+		         fb->red_mask_size,
+		         fb->red_mask_shift,
+		         fb->green_mask_size,
+		         fb->green_mask_shift,
+		         fb->blue_mask_size,
+		         fb->blue_mask_shift);
+	} else {
+		tty_init(NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	}
+
+	printk("Hello on tty%d on moose-kernel v%d.%d.%d%s\n",
+	       tty_get_active()->index,
 	       VER_MAJOR,
 	       VER_MINOR,
 	       VER_PATCH,

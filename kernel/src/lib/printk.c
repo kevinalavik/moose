@@ -101,6 +101,13 @@ void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding
 			tmp /= 10;
 			digits++;
 		}
+	} else if (base == 8) {
+		uint64_t utmp = (uint64_t)v;
+		digits = 1;
+		while (utmp >= 8) {
+			utmp /= 8;
+			digits++;
+		}
 	} else if (base == 16) {
 		uint64_t utmp = (uint64_t)v;
 		digits = 1;
@@ -122,6 +129,13 @@ void _printnumber(unsigned long base, bool sig, int64_t v, unsigned long padding
 		if (v >= 10)
 			_printnumber(base, false, v / 10, 0);
 		_putc((char)((v % 10) + '0'));
+	}
+
+	if (base == 8) {
+		uint64_t uv = (uint64_t)v;
+		if (uv >= 8)
+			_printnumber(base, false, (int64_t)(uv / 8), 0);
+		_putc((char)((uv % 8) + '0'));
 	}
 
 	if (base == 16) {
@@ -222,6 +236,20 @@ static void _vprint(const char *fmt, va_list list)
 			break;
 		}
 
+		case 'o': {
+			uint64_t v;
+			if (len == LEN_LONGLONG)
+				v = va_arg(list, unsigned long long);
+			else if (len == LEN_LONG)
+				v = va_arg(list, unsigned long);
+			else
+				v = va_arg(list, unsigned int);
+			unsigned long pad = has_prec ? (unsigned long)prec : (unsigned long)width;
+			_printnumber(8, false, (int64_t)v, pad);
+			fmt++;
+			break;
+		}
+
 		case 'x': {
 			uint64_t v;
 			if (len == LEN_LONGLONG)
@@ -295,10 +323,7 @@ void log(const char *fmt, ...)
 	if (kernel_conf.quiet)
 		_log_allow_fb = false;
 
-	if (!kernel_conf.quiet) {
-		_printstr("\033[90m", 0, false);
-	}
-
+	_printstr("\033[90m", 0, false);
 	va_list ap;
 	va_start(ap, fmt);
 	if (tsc_hz != 0) {
@@ -317,11 +342,7 @@ void log(const char *fmt, ...)
 	vprintk(fmt, ap);
 	va_end(ap);
 	_log_allow_fb = true;
-
-	if (!kernel_conf.quiet) {
-		_printstr("\033[0m", 0, false);
-	}
-
+	_printstr("\033[0m", 0, false);
 	spin_unlock_irqrestore(&log_lock, flags);
 }
 

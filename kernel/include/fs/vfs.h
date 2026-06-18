@@ -83,6 +83,11 @@ typedef struct cred {
 #define DT_LNK 10
 #define DT_SOCK 12
 
+/* Device number helpers (Linux-compatible encoding) */
+#define MKDEV(major, minor) (((uint32_t)(major) << 8) | ((uint32_t)(minor) & 0xff))
+#define MAJOR(dev) (((uint32_t)(dev)) >> 8)
+#define MINOR(dev) (((uint32_t)(dev)) & 0xff)
+
 #define VFS_NAME_MAX 255  /* max bytes in one path component        */
 #define VFS_PATH_MAX 4096 /* max bytes in a full path               */
 #define VFS_MAX_MOUNTS 16 /* max simultaneously mounted filesystems */
@@ -123,6 +128,12 @@ struct inode_ops {
 	int (*getattr)(inode_t *inode);
 	int (*setattr)(
 	    inode_t *inode, uint32_t mode, uint32_t uid, uint32_t gid, const cred_t *cred);
+	inode_t *(*mknod)(inode_t *dir,
+	                  const char *name,
+	                  uint32_t mode,
+	                  uint32_t dev,
+	                  const cred_t *cred,
+	                  int *err);
 };
 
 struct file_ops {
@@ -161,6 +172,7 @@ struct inode {
 	uint64_t i_ctime;   /* last status change                                 */
 	uint32_t i_nlink;   /* hard link count (0 meanns this inode can be freed) */
 	uint32_t i_blocks;  /* 512-byte blocks allocated                          */
+	uint32_t i_rdev;    /* device number (chr/blk nodes only)                 */
 	superblock_t *i_sb; /* back-pointer to owning superblock                  */
 	void *i_private;    /* fs-specific inode data                             */
 	inode_ops_t *i_ops;
@@ -216,5 +228,6 @@ int vfs_rmdir(const char *path, const cred_t *cred);
 int vfs_rename(const char *old_path, const char *new_path, const cred_t *cred);
 int vfs_truncate(const char *path, uint64_t size, const cred_t *cred);
 int vfs_ioctl(file_t *file, uint32_t cmd, void *arg);
+int vfs_mknod(const char *path, uint32_t mode, uint32_t dev, const cred_t *cred);
 
 #endif // FS_VFS_H

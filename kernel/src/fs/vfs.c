@@ -788,3 +788,39 @@ int vfs_truncate(const char *path, uint64_t size, const cred_t *cred)
 
 	return inode->i_ops->truncate(inode, size, cred);
 }
+
+int vfs_mknod(const char *path, uint32_t mode, uint32_t dev, const cred_t *cred)
+{
+	if (!path || !cred)
+		return -EINVAL;
+
+	if (!S_ISCHR(mode) && !S_ISBLK(mode) && !S_ISFIFO(mode))
+		return -EINVAL;
+
+	char dir_buf[VFS_PATH_MAX];
+	char name_buf[VFS_NAME_MAX + 1];
+	int ret = split_path(path, dir_buf, sizeof(dir_buf), name_buf, sizeof(name_buf));
+	if (ret < 0)
+		return ret;
+
+	int err = 0;
+	inode_t *dir = vfs_resolve(dir_buf, cred, &err);
+	if (!dir)
+		return err;
+
+	if (!S_ISDIR(dir->i_mode))
+		return -ENOTDIR;
+
+	ret = check_perm(dir, cred, 2 /* write */);
+	if (ret < 0)
+		return ret;
+
+	if (!dir->i_ops || !dir->i_ops->mknod)
+		return -ENOSYS;
+
+	inode_t *inode = dir->i_ops->mknod(dir, name_buf, mode, dev, cred, &err);
+	if (!inode)
+		return err;
+
+	return 0;
+}
