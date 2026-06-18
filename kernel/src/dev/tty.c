@@ -303,10 +303,10 @@ void tty_init(void *fb_addr,
 		spin_init(&t->lock);
 		t->index = i;
 
-		/* Default termios: output processing on, NL->CR+NL, echo, canonical */
+		/* Default termios: output processing on, NL->CR+NL, canonical */
 		t->termios.c_iflag = ICRNL;
 		t->termios.c_oflag = OPOST | ONLCR;
-		t->termios.c_lflag = ECHO | ICANON;
+		t->termios.c_lflag = ICANON;
 	}
 
 	tty_t *tty0 = &tty_table[0];

@@ -284,8 +284,29 @@ void kernel_entry(void)
 	       VER_PATCH,
 	       VER_NOTE);
 
+	printk("(try typing!)\n\n");
 
-	/* enable interrupts and halt */
 	sti();
-	hcf();
+
+	/* set tty ioctl */
+	{
+		int err;
+		static const cred_t root = {.uid = 0, .gid = 0};
+		file_t *f = vfs_open("/dev/tty0", O_RDWR, 0, &root, &err);
+		if (f) {
+			tty_termios_t t;
+			vfs_ioctl(f, TCGETS, &t);
+
+			t.c_lflag |= ECHO | ECHOE; /* enable echo, BS-SP-BS on backspace */
+			t.c_lflag &= ~ICANON;      /* raw mode (no line buffering) */
+
+			vfs_ioctl(f, TCSETS, &t);
+		} else {
+			printk("tty: open /dev/tty0 failed err=%d\n", err);
+		}
+	}
+
+	log("boot: idle loop\n");
+	for (;;)
+		hlt();
 }
