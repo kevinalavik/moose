@@ -153,6 +153,7 @@ typedef enum {
 	LEN_DEFAULT,
 	LEN_LONG,
 	LEN_LONGLONG,
+	LEN_SIZEOF,
 } len_mod_t;
 
 static const char *_parse_len(const char *fmt, len_mod_t *len)
@@ -166,6 +167,9 @@ static const char *_parse_len(const char *fmt, len_mod_t *len)
 		} else {
 			*len = LEN_LONG;
 		}
+	} else if (*fmt == 'z') {
+		*len = LEN_SIZEOF;
+		fmt++;
 	}
 	return fmt;
 }
@@ -212,7 +216,7 @@ static void _vprint(const char *fmt, va_list list)
 			int64_t v;
 			if (len == LEN_LONGLONG)
 				v = va_arg(list, long long);
-			else if (len == LEN_LONG)
+			else if (len == LEN_LONG || len == LEN_SIZEOF)
 				v = va_arg(list, long);
 			else
 				v = va_arg(list, int);
@@ -226,7 +230,7 @@ static void _vprint(const char *fmt, va_list list)
 			uint64_t v;
 			if (len == LEN_LONGLONG)
 				v = va_arg(list, unsigned long long);
-			else if (len == LEN_LONG)
+			else if (len == LEN_LONG || len == LEN_SIZEOF)
 				v = va_arg(list, unsigned long);
 			else
 				v = va_arg(list, unsigned int);
@@ -240,7 +244,7 @@ static void _vprint(const char *fmt, va_list list)
 			uint64_t v;
 			if (len == LEN_LONGLONG)
 				v = va_arg(list, unsigned long long);
-			else if (len == LEN_LONG)
+			else if (len == LEN_LONG || len == LEN_SIZEOF)
 				v = va_arg(list, unsigned long);
 			else
 				v = va_arg(list, unsigned int);
@@ -254,7 +258,7 @@ static void _vprint(const char *fmt, va_list list)
 			uint64_t v;
 			if (len == LEN_LONGLONG)
 				v = va_arg(list, unsigned long long);
-			else if (len == LEN_LONG)
+			else if (len == LEN_LONG || len == LEN_SIZEOF)
 				v = va_arg(list, unsigned long);
 			else
 				v = va_arg(list, unsigned int);

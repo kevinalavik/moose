@@ -46,19 +46,6 @@ struct flanterm_context *ft_ctx = NULL;
 bool _log_allow_fb = true;
 static const cred_t _root_cred = {.uid = 0, .gid = 0};
 
-#define CAT_FILE(path)                                                                             \
-	do {                                                                                       \
-		int _err = 0;                                                                      \
-		file_t *_f = vfs_open(path, O_RDONLY, 0, &_root_cred, &_err);                      \
-		if (_f) {                                                                          \
-			char _buf[256];                                                            \
-			memset(_buf, 0, sizeof(_buf));                                             \
-			vfs_read(_f, _buf, sizeof(_buf) - 1);                                      \
-			printk(path ": %s\n", _buf);                                               \
-			vfs_close(_f);                                                             \
-		}                                                                                  \
-	} while (0)
-
 void putc(char ch)
 {
 	if (ch == '\n')
@@ -242,9 +229,6 @@ void kernel_entry(void)
 	devtmpfs_init();
 	vfs_mkdir("/dev", 0755, &_root_cred);
 	vfs_mount("devtmpfs", "/dev", NULL);
-
-	CAT_FILE("/test.txt");
-	CAT_FILE("/subdir/abc.txt");
 
 	/* setup pit timer */
 	pit_init();
