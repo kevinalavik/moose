@@ -7,6 +7,8 @@
 #include <lib/printk.h>
 #include <sys/errno.h>
 #include <sys/spinlock.h>
+#include <boot/limine.h>
+#include <lib/printk.h>
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
 #include <extra/ascii_font.h>
@@ -284,16 +286,7 @@ int tty_switch(int n)
 	return 0;
 }
 
-void tty_init(void *fb_addr,
-              size_t fb_width,
-              size_t fb_height,
-              size_t fb_pitch,
-              uint8_t red_mask_size,
-              uint8_t red_mask_shift,
-              uint8_t green_mask_size,
-              uint8_t green_mask_shift,
-              uint8_t blue_mask_size,
-              uint8_t blue_mask_shift)
+void tty_init(struct limine_framebuffer *fb)
 {
 	spin_init(&tty_global_lock);
 
@@ -303,57 +296,63 @@ void tty_init(void *fb_addr,
 		spin_init(&t->lock);
 		t->index = i;
 
-		/* Default termios: output processing on, NL->CR+NL, canonical */
+		/* Default termios: output processing on, NL->CR+NL, canonical, echo mode */
 		t->termios.c_iflag = ICRNL;
 		t->termios.c_oflag = OPOST | ONLCR;
-		t->termios.c_lflag = ICANON;
+		t->termios.c_lflag = ECHOE | ECHO | ICANON;
 	}
 
-	tty_t *tty0 = &tty_table[0];
-	if (fb_addr) {
-		tty0->ft_ctx = flanterm_fb_init(tty_ft_malloc,
-		                                tty_ft_free,
-		                                (uint32_t *)fb_addr,
-		                                fb_width,
-		                                fb_height,
-		                                fb_pitch,
-		                                red_mask_size,
-		                                red_mask_shift,
-		                                green_mask_size,
-		                                green_mask_shift,
-		                                blue_mask_size,
-		                                blue_mask_shift,
-		                                NULL,
-		                                NULL,
-		                                NULL,
-		                                NULL,
-		                                NULL,
-		                                NULL,
-		                                NULL,
-		                                (void *)ascii_font,
-		                                ASCII_FONT_COUNT,
-		                                ASCII_FONT_WIDTH,
-		                                ASCII_FONT_HEIGHT,
-		                                0,
-		                                0,
-		                                0,
-		                                0,
-		                                FLANTERM_FB_ROTATE_0);
+	for (int i = 0; i < TTY_MAX; i++) {
+		tty_t *t = &tty_table[i];
+		if (fb) {
+			t->ft_ctx = flanterm_fb_init(tty_ft_malloc,
+			                             tty_ft_free,
+			                             (uint32_t *)fb->address,
+			                             fb->width,
+			                             fb->height,
+			                             fb->pitch,
+			                             fb->red_mask_size,
+			                             fb->red_mask_shift,
+			                             fb->green_mask_size,
+			                             fb->green_mask_shift,
+			                             fb->blue_mask_size,
+			                             fb->blue_mask_shift,
+			                             NULL,
+			                             NULL,
+			                             NULL,
+			                             NULL,
+			                             NULL,
+			                             NULL,
+			                             NULL,
+			                             (void *)ascii_font,
+			                             ASCII_FONT_COUNT,
+			                             ASCII_FONT_WIDTH,
+			                             ASCII_FONT_HEIGHT,
+			                             0,
+			                             0,
+			                             0,
+			                             0,
+			                             FLANTERM_FB_ROTATE_0);
 
-		if (!tty0->ft_ctx) {
-			log("tty: WARN: flanterm_fb_init failed for tty0, no display output\n");
-		} else {
-			size_t cols, rows;
-			flanterm_get_dimensions(tty0->ft_ctx, &cols, &rows);
-			log("tty: tty0 flanterm context: %llux%llu chars\n",
-			    (unsigned long long)cols,
-			    (unsigned long long)rows);
+			if (!t->ft_ctx) {
+				log("tty: WARN: flanterm_fb_init failed for tty%d\n", i);
+			} else {
+				size_t cols, rows;
+				flanterm_get_dimensions(t->ft_ctx, &cols, &rows);
+				log("tty: tty%d flanterm context: %llux%llu chars\n",
+				    i,
+				    (unsigned long long)cols,
+				    (unsigned long long)rows);
+			}
 		}
-	} else {
-		log("tty: no framebuffer; tty0 will have no display output\n");
+		t->initialised = true;
 	}
 
-	tty0->initialised = true;
+	/* if any tty has a working fb, it will already be double-buffered
+	 * and we just pick tty0 as the initial active one */
+	if (fb && !tty_table[0].ft_ctx)
+		log("tty: no working framebuffer for any tty\n");
+
 	tty_active_idx = 0;
 
 	int ret = chrdev_register(TTY_MAJOR, "tty", &tty_fops);
@@ -361,12 +360,13 @@ void tty_init(void *fb_addr,
 		log("tty: WARN: chrdev_register failed: %d\n", ret);
 	}
 
-	ret = devtmpfs_mknod("tty0", S_IFCHR | 0620, MKDEV(TTY_MAJOR, 0));
-	if (ret < 0) {
-		log("tty: WARN: devtmpfs_mknod tty0 failed: %d\n", ret);
-	} else {
-		log("tty: created /dev/tty0 (major=%d minor=0)\n", TTY_MAJOR);
+	for (int i = 0; i < TTY_MAX; i++) {
+		char name[16];
+		snprintk(name, sizeof(name), "tty%d", i);
+		ret = devtmpfs_mknod(name, S_IFCHR | 0620, MKDEV(TTY_MAJOR, i));
+		if (ret < 0)
+			log("tty: WARN: devtmpfs_mknod %s failed: %d\n", name, ret);
 	}
 
-	log("tty: initialised (%d ttys available, tty0 active)\n", TTY_MAX);
+	log("tty: initialised (%d ttys, tty0 active)\n", TTY_MAX);
 }

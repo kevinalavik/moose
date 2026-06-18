@@ -261,50 +261,39 @@ void kernel_entry(void)
 		ft_ctx = NULL;
 	}
 
-	if (fb) {
-		kernel_conf.quiet = true; /* dont fill the tty with kernel logs by default */
-		tty_init(fb->address,
-		         fb->width,
-		         fb->height,
-		         fb->pitch,
-		         fb->red_mask_size,
-		         fb->red_mask_shift,
-		         fb->green_mask_size,
-		         fb->green_mask_shift,
-		         fb->blue_mask_size,
-		         fb->blue_mask_shift);
-	} else {
-		tty_init(NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	}
+	if (fb)
+		kernel_conf.quiet = true;
+	tty_init(fb);
 
-	printk("Hello on tty%d on moose-kernel v%d.%d.%d%s\n",
-	       tty_get_active()->index,
-	       VER_MAJOR,
-	       VER_MINOR,
-	       VER_PATCH,
-	       VER_NOTE);
-
-	printk("(try typing!)\n\n");
-
-	sti();
-
-	/* set tty ioctl */
 	{
-		int err;
-		static const cred_t root = {.uid = 0, .gid = 0};
-		file_t *f = vfs_open("/dev/tty0", O_RDWR, 0, &root, &err);
-		if (f) {
-			tty_termios_t t;
-			vfs_ioctl(f, TCGETS, &t);
-
-			t.c_lflag |= ECHO | ECHOE; /* enable echo, BS-SP-BS on backspace */
-			t.c_lflag &= ~ICANON;      /* raw mode (no line buffering) */
-
-			vfs_ioctl(f, TCSETS, &t);
-		} else {
-			printk("tty: open /dev/tty0 failed err=%d\n", err);
+		char buf[512];
+		int n = snprintk(
+		    buf,
+		    sizeof(buf),
+		    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+		    "@@@@@@@@@@@@@@@@@@@\n@ moose-kernel v%d.%d.%d%s finished "
+		    "loading, thanks for your "
+		    "patience @\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+		    "@@@@@@@@@@@@@@@@@@@\n\n",
+		    VER_MAJOR,
+		    VER_MINOR,
+		    VER_PATCH,
+		    VER_NOTE);
+		if (n > 0) {
+			for (int i = 0; i < TTY_MAX; i++) {
+				char path[16];
+				snprintk(path, sizeof(path), "/dev/tty%d", i);
+				int err = 0;
+				file_t *f = vfs_open(path, O_WRONLY, 0, &_root_cred, &err);
+				if (f) {
+					vfs_write(f, buf, (size_t)n);
+					vfs_close(f);
+				}
+			}
 		}
 	}
+
+	sti();
 
 	log("boot: idle loop\n");
 	for (;;)

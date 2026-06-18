@@ -8,6 +8,8 @@
 #include <fs/vfs.h>
 #include <sys/spinlock.h>
 
+struct limine_framebuffer;
+
 #define TTY_MAJOR 4
 #define TTY_MAX 8
 #define TTY_IBUF_SIZE 512
@@ -62,19 +64,11 @@ typedef struct tty {
 	bool initialised;
 } tty_t;
 
-void tty_init(void *fb_addr,
-              size_t fb_width,
-              size_t fb_height,
-              size_t fb_pitch,
-              uint8_t red_mask_size,
-              uint8_t red_mask_shift,
-              uint8_t green_mask_size,
-              uint8_t green_mask_shift,
-              uint8_t blue_mask_size,
-              uint8_t blue_mask_shift);
+void tty_init(struct limine_framebuffer *fb);
 
 tty_t *tty_get_active(void);
 int tty_switch(int n);
 void tty_input_byte(tty_t *tty, char c);
+
 
 #endif // DEV_TTY_H

@@ -117,6 +117,12 @@ static void ps2_kbd_irq(int_frame_t *frame)
 	if (!pressed)
 		goto done;
 
+	/* Ctrl + F1-F8: switch TTY */
+	if (ctrl_pressed && scancode >= 0x3B && scancode <= 0x42) {
+		tty_switch(scancode - 0x3B);
+		goto done;
+	}
+
 	if (extended) {
 		tty_t *tty = tty_get_active();
 		if (tty) {
