@@ -39,6 +39,7 @@
 #include <dev/device.h>
 #include <dev/acpi_bus.h>
 #include <dev/tty.h>
+#include <lib/string.h>
 
 uint64_t kernel_phys = 0;
 uint64_t kernel_virt = 0;
@@ -249,24 +250,30 @@ void kernel_entry(void)
 		kernel_conf.quiet = true;
 	tty_init(fb);
 
+	/* display little banner on all ttys*/
 	{
-		char buf[512];
-		int n = snprintk(
-		    buf,
-		    sizeof(buf),
-		    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-		    "@@@@@@@@@@@@@@@@@@@\n@ moose-kernel v%d.%d.%d%s finished "
-		    "loading, thanks for your "
-		    "patience @\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-		    "@@@@@@@@@@@@@@@@@@@\n\n",
-		    VER_MAJOR,
-		    VER_MINOR,
-		    VER_PATCH,
-		    VER_NOTE);
-		if (n > 0) {
-			for (int i = 0; i < TTY_MAX; i++) {
+		for (int i = 0; i < TTY_MAX; i++) {
+			char buf[512];
+
+			int n = snprintk(
+			    buf,
+			    sizeof(buf),
+			    " _ __ ___   ___   ___   ___   ___   ___   ___  ___  ___ \n"
+			    "| '_ ` _ \\ / _ \\ / _ \\ / _ \\ / _ \\ / _ \\ / _ \\/ __|/ _ \\\n"
+			    "| | | | | | (_) | (_) | (_) | (_) | (_) | (_) \\__ \\  __/\n"
+			    "|_| |_| |_|\\___/ \\___/ \\___/ \\___/ \\___/ \\___/|___/\\___|\n"
+			    "--------------------------------------------------------\n"
+			    "moose-kernel v%d.%d.%d%s on tty%d (no init, ECHO however)\n\n",
+			    VER_MAJOR,
+			    VER_MINOR,
+			    VER_PATCH,
+			    VER_NOTE,
+			    i);
+
+			if (n > 0) {
 				char path[16];
 				snprintk(path, sizeof(path), "/dev/tty%d", i);
+
 				int err = 0;
 				file_t *f = vfs_open(path, O_WRONLY, 0, &_root_cred, &err);
 				if (f) {
@@ -276,9 +283,9 @@ void kernel_entry(void)
 			}
 		}
 	}
+	tty_switch(0); /* start on tty0 */
 
 	sti();
-
 	log("boot: idle loop\n");
 	for (;;)
 		hlt();
